@@ -1,0 +1,115 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# doc
+doc.txt
+
+# agentic rules
+AGENTS.md
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Production build
+dist/
+build/
+cli/
+
+# restricted folders
+script/
+dump/
+
+# Secret environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Mac OS system files
+.DS_Store
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# TypeScript
+*.tsbuildinfo
+*.tscache
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Python environment files (if you're using Python)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# JetBrains project files
+.idea/
+
+# Parcel-bundler cache (if applicable)
+.cache/
+
+# Svelte files (if applicable)
+.svelte-kit/
+.svelte-build/
+
+# Next.js build output
+.next/
+out/
+
+# React Native
+.expo/
+.expo-shared/
+
+# Jest
+coverage/
+.cache/
+jest/
+
+# Storybook
+.storybook/
+dist-storybook/
+storybook-static/
+
+# Misc
+*.log
+*.lock
+*.gz
+*.zip
+*.7z
