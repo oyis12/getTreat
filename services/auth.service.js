@@ -3,7 +3,7 @@ import User from "../models/user.model.js";
 import Verification from "../models/verification.model.js";
 import RefreshToken from "../models/refresh-token.model.js";
 
-import { AppError } from "../utils/AppError.js";
+import  AppError  from "../utils/AppError.js";
 import {
   hashPassword,
   comparePassword,
@@ -65,15 +65,9 @@ const createVerificationCode = async (user, type) => {
 
 
 const issueTokens = async (user, req) => {
-  const accessToken = generateAccessToken({
-    userId: user._id.toString(),
-    role: user.role,
-  });
+const accessToken = generateAccessToken(user);
 
-  const refreshToken = generateRefreshToken({
-    userId: user._id.toString(),
-    role: user.role,
-  });
+const refreshToken = generateRefreshToken(user);
 
   const refreshTokenHash = hashToken(refreshToken);
 
@@ -91,14 +85,13 @@ const issueTokens = async (user, req) => {
   };
 };
 
-
 export const signup = async (payload, req) => {
   const {
     fullname,
     email,
     phone_no,
     birth_date,
-    addr,
+    address,
     role,
     password,
   } = payload;
@@ -127,12 +120,12 @@ export const signup = async (payload, req) => {
 
     role: role || "patient",
 
-    addr: {
-      country: addr?.country?.trim() || undefined,
-      city: addr?.city?.trim() || undefined,
-      state: addr?.state?.trim() || undefined,
-      zip: addr?.zip?.trim() || undefined,
-      house_no: addr?.house_no?.trim() || undefined,
+    address: {
+      country: address?.country?.trim() || undefined,
+      city: address?.city?.trim() || undefined,
+      state: address?.state?.trim() || undefined,
+      zip: address?.zip?.trim() || undefined,
+      house_no: address?.house_no?.trim() || undefined,
     },
 
     emailVerified: false,
@@ -181,82 +174,166 @@ export const signup = async (payload, req) => {
     email: user.email,
     phone_no: user.phone_no,
     birth_date: user.birth_date,
-    addr: user.addr,
+    address: user.address,
     role: user.role,
   };
 };
 
-
 export const signin = async (email, password, req) => {
-  const normalizedEmail = email.trim().toLowerCase();
+  console.log("🔵 SIGNIN SERVICE: started");
 
-  const user = await User.findOne({
-    email: normalizedEmail,
-  }).select("+password");
+  try {
+    console.log("🔵 SIGNIN SERVICE: normalizing email");
 
-  if (!user) {
-    throw new AppError(
-      "Invalid email or password",
-      401
+    const normalizedEmail = email.trim().toLowerCase();
+
+    console.log(
+      "🔵 SIGNIN SERVICE: normalized email:",
+      normalizedEmail
     );
-  }
 
-  if (user.accountStatus === "suspended") {
-    throw new AppError(
-      "Your account has been suspended",
-      403
+    console.log(
+      "🔵 SIGNIN SERVICE: looking up user..."
     );
-  }
 
-  if (user.accountStatus === "deactivated") {
-    throw new AppError(
-      "Your account has been deactivated",
-      403
+    const user = await User.findOne({
+      email: normalizedEmail,
+    }).select("+password");
+
+    console.log(
+      "🔵 SIGNIN SERVICE: user found:",
+      !!user
     );
-  }
 
-  if (!user.auth?.providers?.local?.enabled) {
-    throw new AppError(
-      "Password authentication is not enabled for this account",
-      401
+    if (!user) {
+      throw new AppError(
+        "Invalid email or password",
+        401
+      );
+    }
+
+    console.log(
+      "🔵 SIGNIN SERVICE: user id:",
+      user._id.toString()
     );
-  }
 
-  const passwordMatches = await comparePassword(
-    password,
-    user.password
-  );
-
-  if (!passwordMatches) {
-    throw new AppError(
-      "Invalid email or password",
-      401
+    console.log(
+      "🔵 SIGNIN SERVICE: account status:",
+      user.accountStatus
     );
-  }
 
-  if (!user.emailVerified) {
-    throw new AppError(
-      "Please verify your email before signing in",
-      403
+    console.log(
+      "🔵 SIGNIN SERVICE: email verified:",
+      user.emailVerified
     );
+
+    console.log(
+      "🔵 SIGNIN SERVICE: local auth enabled:",
+      user.auth?.providers?.local?.enabled
+    );
+
+    if (user.accountStatus === "suspended") {
+      throw new AppError(
+        "Your account has been suspended",
+        403
+      );
+    }
+
+    if (user.accountStatus === "deactivated") {
+      throw new AppError(
+        "Your account has been deactivated",
+        403
+      );
+    }
+
+    if (!user.auth?.providers?.local?.enabled) {
+      throw new AppError(
+        "Password authentication is not enabled for this account",
+        401
+      );
+    }
+
+    console.log(
+      "🔵 SIGNIN SERVICE: comparing password..."
+    );
+
+    const passwordMatches = await comparePassword(
+      password,
+      user.password
+    );
+
+    console.log(
+      "🔵 SIGNIN SERVICE: password matches:",
+      passwordMatches
+    );
+
+    if (!passwordMatches) {
+      throw new AppError(
+        "Invalid email or password",
+        401
+      );
+    }
+
+    if (!user.emailVerified) {
+      throw new AppError(
+        "Please verify your email before signing in",
+        403
+      );
+    }
+
+    console.log(
+      "🔵 SIGNIN SERVICE: updating last login..."
+    );
+
+    user.lastLoginAt = new Date();
+
+    if (user.accountStatus === "pending") {
+      user.accountStatus = "active";
+    }
+
+    await user.save();
+
+    console.log(
+      "🔵 SIGNIN SERVICE: user saved successfully"
+    );
+
+    console.log(
+      "🔵 SIGNIN SERVICE: issuing tokens..."
+    );
+
+    const tokens = await issueTokens(user, req);
+
+    console.log(
+      "🔵 SIGNIN SERVICE: tokens created successfully"
+    );
+
+    console.log(
+      "🔵 SIGNIN SERVICE: sanitizing user..."
+    );
+
+    const sanitized = sanitizeUser(user);
+
+    console.log(
+      "🔵 SIGNIN SERVICE: sanitize successful"
+    );
+
+    return {
+      user: sanitized,
+      ...tokens,
+    };
+
+  } catch (error) {
+    console.error(
+      "🔴 SIGNIN SERVICE ERROR:"
+    );
+
+    console.error("Name:", error.name);
+    console.error("Message:", error.message);
+    console.error("Stack:", error.stack);
+
+    throw error;
   }
-
-  user.lastLoginAt = new Date();
-
-  if (user.accountStatus === "pending") {
-    user.accountStatus = "active";
-  }
-
-  await user.save();
-
-  const tokens = await issueTokens(user, req);
-
-  return {
-    user: sanitizeUser(user),
-    ...tokens,
-  };
 };
-
 
 export const verifyEmail = async (email, code) => {
   const normalizedEmail = email.trim().toLowerCase();
@@ -516,69 +593,69 @@ export const newPassword = async (
   return null;
 };
 
-export const completeProfile = async (
-  userId,
-  payload
-) => {
+export const completeProfile = async (userId, payload) => {
   const user = await User.findById(userId);
 
   if (!user) {
-    throw new AppError(
-      "User not found",
-      404
-    );
+    throw new AppError("User not found", 404);
   }
 
   if (
     user.accountStatus === "suspended" ||
     user.accountStatus === "deactivated"
   ) {
-    throw new AppError(
-      "Your account cannot be updated",
-      403
-    );
+    throw new AppError("Your account cannot be updated", 403);
   }
 
   const {
     phone_no,
     gender,
     birth_date,
-    addr,
+    address,
   } = payload;
 
+  // Phone number
   if (phone_no !== undefined) {
-    user.phone_no = phone_no?.trim() || undefined;
+    user.phone_no = phone_no?.trim() || null;
   }
 
+  // Gender
   if (gender !== undefined) {
-    user.gender = gender?.trim() || undefined;
+    user.gender = gender?.trim() || null;
   }
 
+  // Birth date
   if (birth_date !== undefined) {
     user.birth_date = birth_date;
   }
 
-  if (addr !== undefined) {
-    user.addr = {
+  // Address
+  if (address !== undefined) {
+    user.address = {
       country:
-        addr.country?.trim() ||
-        user.addr?.country,
+        address.country?.trim() ||
+        user.address?.country ||
+        null,
 
       city:
-        addr.city?.trim() ||
-        user.addr?.city,
+        address.city?.trim() ||
+        user.address?.city ||
+        null,
 
       state:
-        addr.state?.trim() ||
-        user.addr?.state,
+        address.state?.trim() ||
+        user.address?.state ||
+        null,
 
       zip:
-        addr.zip?.trim() ||
-        user.addr?.zip,
+        address.zip?.trim() ||
+        user.address?.zip ||
+        null,
 
       house_no:
-        addr.house_no?.trim() ||
-        user.addr?.house_no,
+        address.house_no?.trim() ||
+        user.address?.house_no ||
+        null,
     };
   }
 
@@ -586,7 +663,25 @@ export const completeProfile = async (
 
   await user.save();
 
-  return null;
+  return {
+    user: {
+      id: user._id.toString(),
+      fullname: user.fullname,
+      email: user.email,
+      phone_no: user.phone_no,
+      birth_date: user.birth_date,
+      gender: user.gender,
+      address: user.address,
+      role: user.role,
+      emailVerified: user.emailVerified,
+      accountStatus: user.accountStatus,
+      profileCompleted: user.profileCompleted,
+      profileImage: user.profileImage,
+      lastLoginAt: user.lastLoginAt,
+      created_at: user.createdAt,
+      modified_at: user.modifiedAt,
+    },
+  };
 };
 
 export const refreshAccessToken = async (
@@ -673,15 +768,9 @@ export const refreshAccessToken = async (
   }
 
 
-  const newAccessToken = generateAccessToken({
-    userId: user._id.toString(),
-    role: user.role,
-  });
+ const newAccessToken = generateAccessToken(user);
 
-  const newRefreshToken = generateRefreshToken({
-    userId: user._id.toString(),
-    role: user.role,
-  });
+const newRefreshToken = generateRefreshToken(user);
 
   const newRefreshTokenHash =
     hashToken(newRefreshToken);

@@ -2,54 +2,42 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
+
 const addressSchema = new Schema(
   {
     country: {
       type: String,
       trim: true,
       maxlength: 100,
+      default: null,
     },
 
     city: {
       type: String,
       trim: true,
       maxlength: 100,
+      default: null,
     },
 
     state: {
       type: String,
       trim: true,
       maxlength: 100,
+      default: null,
     },
 
     zip: {
       type: String,
       trim: true,
       maxlength: 30,
+      default: null,
     },
 
     house_no: {
       type: String,
       trim: true,
       maxlength: 200,
-    },
-  },
-  {
-    _id: false,
-  }
-);
-
-const authProviderSchema = new Schema(
-  {
-    enabled: {
-      type: Boolean,
-      default: false,
-    },
-
-    googleId: {
-      type: String,
       default: null,
-      sparse: true,
     },
   },
   {
@@ -76,7 +64,7 @@ const authSchema = new Schema(
         googleId: {
           type: String,
           default: null,
-          sparse: true,
+          trim: true,
         },
       },
     },
@@ -85,6 +73,7 @@ const authSchema = new Schema(
     _id: false,
   }
 );
+
 
 const userSchema = new Schema(
   {
@@ -102,7 +91,6 @@ const userSchema = new Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,
       maxlength: 254,
     },
 
@@ -143,12 +131,13 @@ const userSchema = new Schema(
 
     auth: {
       type: authSchema,
+
       default: () => ({
         providers: {
           local: {
             enabled: false,
-            googleId: null,
           },
+
           google: {
             enabled: false,
             googleId: null,
@@ -166,7 +155,12 @@ const userSchema = new Schema(
     accountStatus: {
       type: String,
       enum: {
-        values: ["pending", "active", "suspended", "deactivated"],
+        values: [
+          "pending",
+          "active",
+          "suspended",
+          "deactivated",
+        ],
         message: "Invalid account status",
       },
       default: "pending",
@@ -199,12 +193,8 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
-
-    modifiedAt: {
-      type: Date,
-      default: Date.now,
-    },
   },
+
   {
     timestamps: {
       createdAt: "createdAt",
@@ -223,12 +213,11 @@ userSchema.index(
   }
 );
 
+
 userSchema.pre("save", function (next) {
   if (this.email) {
     this.email = this.email.toLowerCase().trim();
   }
-
-  next();
 });
 
 
@@ -237,12 +226,12 @@ userSchema.set("toJSON", {
     ret.id = ret._id?.toString();
 
     delete ret._id;
-    delete ret.__v;
     delete ret.password;
 
     return ret;
   },
 });
+
 
 const User = mongoose.model("User", userSchema);
 

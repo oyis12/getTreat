@@ -8,6 +8,8 @@ import passport from "passport";
 import { configurePassport } from "./config/passport.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 
+import authRoutes from "./routes/auth.routes.js";
+
 
 
 process.on('uncaughtException', (err) => {
@@ -29,21 +31,22 @@ process.on('unhandledRejection', (err) => {
 
 const app = express();
 
-configurePassport();
-
-app.use(passport.initialize());
-
-app.use(helmet());
-
 app.use(cors({
   origin: env.corsOrigins.length > 0 ? env.corsOrigins : '*',
   credentials: true,
 }));
 
+app.use(helmet());
+
+configurePassport();
+
+app.use(passport.initialize());
+
 
 app.use(express.json({ limit: '10kb' }));
 
 //Routes
+app.use("/api/auth", authRoutes);
 
 
 app.use(errorMiddleware);

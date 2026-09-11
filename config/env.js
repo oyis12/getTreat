@@ -47,4 +47,6 @@ export const env = {
   verificationCodeExpiresMinutes: parseInt(process.env.VERIFICATION_CODE_EXPIRES_MINUTES || "10",10 ),
 
   maxOtpAttempts: parseInt(process.env.MAX_OTP_ATTEMPTS || "5",10),
+
+  emailMode: process.env.EMAIL_MODE || "console",
 };

@@ -8,7 +8,6 @@ const verificationSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     email: {
@@ -16,7 +15,6 @@ const verificationSchema = new Schema(
       required: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
 
     codeHash: {
@@ -35,13 +33,11 @@ const verificationSchema = new Schema(
         message: "Invalid verification type",
       },
       required: true,
-      index: true,
     },
 
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
 
     attempts: {

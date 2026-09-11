@@ -40,6 +40,14 @@ export const getOtpExpiry = (
   );
 };
 
+export const getOtpExpiration = (
+  minutes = OTP_EXPIRY_MINUTES
+) => {
+  return new Date(
+    Date.now() + minutes * 60 * 1000
+  );
+};
+
 export default {
   generateOtp,
   hashOtp,

@@ -8,7 +8,6 @@ const refreshTokenSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     tokenHash: {
@@ -20,13 +19,11 @@ const refreshTokenSchema = new Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
 
     revokedAt: {
       type: Date,
       default: null,
-      index: true,
     },
 
     replacedByTokenHash: {
@@ -68,7 +65,7 @@ refreshTokenSchema.index({
 
 
 refreshTokenSchema.index(
-  { expiresAt: 1 },
+  // { expiresAt: 1 },
   {
     expireAfterSeconds: 0,
   }

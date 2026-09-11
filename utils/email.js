@@ -6,11 +6,49 @@ const sendEmail = async ({
   subject,
   html,
   text,
+  developmentCode,
 }) => {
   if (!to) {
     throw new Error("Recipient email is required");
   }
 
+  /**
+   * DEVELOPMENT EMAIL MODE
+   *
+   * When EMAIL_MODE=console and we are not in production,
+   * don't attempt to connect to Resend.
+   *
+   * This allows us to test the complete authentication flow
+   * before the production email service/domain is configured.
+   */
+  if (
+    env.nodeEnv !== "production" &&
+    env.emailMode === "console"
+  ) {
+    console.log("\n========================================");
+    console.log("📧 GETTREAT DEVELOPMENT EMAIL");
+    console.log("========================================");
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+
+    if (developmentCode) {
+      console.log(`🔐 Verification/Reset Code: ${developmentCode}`);
+    }
+
+    console.log("========================================\n");
+
+    return {
+      success: true,
+      development: true,
+      messageId: "development-console",
+    };
+  }
+
+  /**
+   * PRODUCTION / REAL EMAIL
+   *
+   * Uses the configured SMTP provider.
+   */
   const result = await mailTransporter.sendMail({
     from: env.mailFrom,
     to,
@@ -90,6 +128,9 @@ GetTreat Team
     subject,
     html,
     text,
+
+    // Only used by development console mode.
+    developmentCode: code,
   });
 };
 
@@ -165,6 +206,9 @@ GetTreat Team
     subject,
     html,
     text,
+
+    // Only used by development console mode.
+    developmentCode: code,
   });
 };
 
