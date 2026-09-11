@@ -6,7 +6,7 @@ import { env } from './env.js';
 export async function connectDB() {
   mongoose.set('strictQuery', true);
 
-  mongoose.connection.on('connected', () => console.log('✅ Connected to smarthub Secure Database'));
+  mongoose.connection.on('connected', () => console.log('✅ Connected to GetTreat Secure Database'));
   mongoose.connection.on('error', (err) => console.error('❌ MongoDB error:', err.message));
   mongoose.connection.on('disconnected', () => console.warn('⚠️ Disconnected from Database. Attempting to reconnect...'));
 
