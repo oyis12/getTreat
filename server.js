@@ -9,6 +9,7 @@ import { configurePassport } from "./config/passport.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 
 import authRoutes from "./routes/auth.routes.js";
+import patientProfileRoutes from "./routes/patient-profile.routes.js";
 
 
 
@@ -47,6 +48,7 @@ app.use(express.json({ limit: '10kb' }));
 
 //Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/patient", patientProfileRoutes);
 
 
 app.use(errorMiddleware);
