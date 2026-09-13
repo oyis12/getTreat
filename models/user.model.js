@@ -2,49 +2,6 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
-
-const addressSchema = new Schema(
-  {
-    country: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-      default: null,
-    },
-
-    city: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-      default: null,
-    },
-
-    state: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-      default: null,
-    },
-
-    zip: {
-      type: String,
-      trim: true,
-      maxlength: 30,
-      default: null,
-    },
-
-    house_no: {
-      type: String,
-      trim: true,
-      maxlength: 200,
-      default: null,
-    },
-  },
-  {
-    _id: false,
-  }
-);
-
 const authSchema = new Schema(
   {
     providers: {
@@ -74,7 +31,6 @@ const authSchema = new Schema(
   }
 );
 
-
 const userSchema = new Schema(
   {
     fullname: {
@@ -92,25 +48,6 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
       maxlength: 254,
-    },
-
-    phone_no: {
-      type: String,
-      trim: true,
-      maxlength: 30,
-      default: null,
-    },
-
-    birth_date: {
-      type: Date,
-      default: null,
-    },
-
-    gender: {
-      type: String,
-      trim: true,
-      maxlength: 50,
-      default: null,
     },
 
     password: {
@@ -167,28 +104,6 @@ const userSchema = new Schema(
       index: true,
     },
 
-    profileCompleted: {
-      type: Boolean,
-      default: false,
-    },
-
-    profileImage: {
-      type: String,
-      trim: true,
-      default: null,
-    },
-
-    profileImagePublicId: {
-      type: String,
-      trim: true,
-      default: null,
-    },
-
-    address: {
-      type: addressSchema,
-      default: () => ({}),
-    },
-
     lastLoginAt: {
       type: Date,
       default: null,
@@ -213,13 +128,13 @@ userSchema.index(
   }
 );
 
-
 userSchema.pre("save", function (next) {
   if (this.email) {
     this.email = this.email.toLowerCase().trim();
   }
-});
 
+  //next();
+});
 
 userSchema.set("toJSON", {
   transform: function (_doc, ret) {
@@ -228,10 +143,13 @@ userSchema.set("toJSON", {
     delete ret._id;
     delete ret.password;
 
+    if (ret.auth?.providers?.google) {
+      delete ret.auth.providers.google.googleId;
+    }
+
     return ret;
   },
 });
-
 
 const User = mongoose.model("User", userSchema);
 

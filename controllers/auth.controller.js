@@ -20,15 +20,11 @@ export const signup = async (req, res, next) => {
 
 export const signin = async (req, res, next) => {
   try {
-    console.log("🔥 SIGNIN CONTROLLER HIT");
-
     const data = await authService.signin(
       req.body.email,
       req.body.password,
       req
     );
-
-    console.log("🔥 SIGNIN SERVICE SUCCESS");
 
     return sendSuccess(res, {
       statusCode: 200,
@@ -36,28 +32,9 @@ export const signin = async (req, res, next) => {
       data,
     });
   } catch (error) {
-    console.error("🔥 SIGNIN CONTROLLER ERROR:", error);
     next(error);
   }
 };
-// export const signin = async (req, res, next) => {
-//   try {
-//     const data = await authService.signin(
-//       req.body.email,
-//       req.body.password,
-//       req
-//     );
-
-//     return sendSuccess(res, {
-//       statusCode: 200,
-//       msg: "Successfully authenticated",
-//       data,
-//     });
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
 
 export const verify = async (req, res, next) => {
   try {

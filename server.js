@@ -59,7 +59,7 @@ let server;
   try {
     await connectDB();
     server = app.listen(env.port, () => {
-      console.log(`✅ Smarthub System running on port ${env.port} [${env.nodeEnv}]`);
+      console.log(`✅ GetTreat API running on port ${env.port} [${env.nodeEnv}]`);
     });
   } catch (err) {
     console.error('❌ Bootstrap Failed:', err.message);

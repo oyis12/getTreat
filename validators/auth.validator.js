@@ -37,39 +37,39 @@ export const signupValidator = [
 
   ...passwordRules,
 
-  body("addr")
+  body("address")
     .optional()
     .isObject()
     .withMessage("Address must be an object"),
 
-  body("addr.country")
+  body("address.country")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("Country is too long"),
 
-  body("addr.state")
+  body("address.state")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("State is too long"),
 
-  body("addr.city")
+  body("address.city")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("City is too long"),
 
-  body("addr.zip")
+  body("address.zip")
     .optional()
     .trim()
     .isLength({ max: 30 })
     .withMessage("ZIP code is too long"),
 
-  body("addr.house_no")
+  body("address.house_no")
     .optional()
     .trim()
-    .isLength({ max: 150 })
+    .isLength({ max: 200 })
     .withMessage("House number is too long"),
 
   body("role")
@@ -167,39 +167,39 @@ export const completeProfileValidator = [
     .isISO8601()
     .withMessage("Birth date must be a valid date"),
 
-  body("addr")
+  body("address")
     .optional()
     .isObject()
     .withMessage("Address must be an object"),
 
-  body("addr.country")
+  body("address.country")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("Country is too long"),
 
-  body("addr.city")
+  body("address.city")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("City is too long"),
 
-  body("addr.state")
+  body("address.state")
     .optional()
     .trim()
     .isLength({ max: 100 })
     .withMessage("State is too long"),
 
-  body("addr.zip")
+  body("address.zip")
     .optional()
     .trim()
     .isLength({ max: 30 })
     .withMessage("ZIP code is too long"),
 
-  body("addr.house_no")
+  body("address.house_no")
     .optional()
     .trim()
-    .isLength({ max: 150 })
+    .isLength({ max: 200 })
     .withMessage("House number is too long"),
 ];
 

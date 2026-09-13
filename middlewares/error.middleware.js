@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import multer from "multer";
 import { sendError } from "../utils/response.js";
 
 const handleValidationError = (error) => {
@@ -54,6 +55,27 @@ export const errorMiddleware = (
         : undefined,
   });
 
+
+  if (error instanceof multer.MulterError) {
+    if (error.code === "LIMIT_FILE_SIZE") {
+      return sendError(res, {
+        statusCode: 400,
+        msg: "Profile image must not exceed 5MB",
+      });
+    }
+
+    if (error.code === "LIMIT_UNEXPECTED_FILE") {
+      return sendError(res, {
+        statusCode: 400,
+        msg: "Only JPG, PNG, and WebP profile images are allowed",
+      });
+    }
+
+    return sendError(res, {
+      statusCode: 400,
+      msg: "Invalid file upload",
+    });
+  }
 
   if (error.isOperational) {
     return sendError(res, {

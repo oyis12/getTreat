@@ -24,21 +24,14 @@ export const sanitizeUser = (user) => {
     id,
     fullname: source.fullname,
     email: source.email,
-    phone_no: source.phone_no,
-    birth_date: source.birth_date,
-    gender: source.gender,
-    address: source.address,
     role: source.role,
     emailVerified: source.emailVerified,
     accountStatus: source.accountStatus,
-    profileCompleted: source.profileCompleted,
-    profileImage: source.profileImage,
     lastLoginAt: source.lastLoginAt,
     created_at:
       source.createdAt || source.created_at,
     modified_at:
-      source.updatedAt ||
-      source.modified_at,
+      source.modifiedAt || source.updatedAt || source.modified_at,
   };
 };
 

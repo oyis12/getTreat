@@ -6,7 +6,68 @@ const isValidDate = (value) => {
   return !Number.isNaN(date.getTime());
 };
 
-export const validatePatientProfileUpdate = (req, _res, next) => {
+const validateAddress = (address) => {
+  if (
+    address === null ||
+    typeof address !== "object" ||
+    Array.isArray(address)
+  ) {
+    throw new AppError("Address must be an object", 400);
+  }
+
+  const allowedFields = [
+    "country",
+    "city",
+    "state",
+    "zip",
+    "house_no",
+  ];
+
+  const unknownFields = Object.keys(address).filter(
+    (field) => !allowedFields.includes(field)
+  );
+
+  if (unknownFields.length > 0) {
+    throw new AppError(
+      `Unknown address field(s): ${unknownFields.join(", ")}`,
+      400
+    );
+  }
+
+  const limits = {
+    country: 100,
+    city: 100,
+    state: 100,
+    zip: 30,
+    house_no: 200,
+  };
+
+  for (const field of allowedFields) {
+    const value = address[field];
+
+    if (value !== undefined && value !== null) {
+      if (typeof value !== "string") {
+        throw new AppError(
+          `Address ${field} must be a string`,
+          400
+        );
+      }
+
+      if (value.trim().length > limits[field]) {
+        throw new AppError(
+          `Address ${field} cannot exceed ${limits[field]} characters`,
+          400
+        );
+      }
+    }
+  }
+};
+
+export const validatePatientProfileUpdate = (
+  req,
+  _res,
+  next
+) => {
   try {
     const {
       fullname,
@@ -16,7 +77,6 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       address,
     } = req.body;
 
-    // Reject unknown top-level fields
     const allowedFields = [
       "fullname",
       "phone_no",
@@ -25,9 +85,7 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       "address",
     ];
 
-    const receivedFields = Object.keys(req.body);
-
-    const unknownFields = receivedFields.filter(
+    const unknownFields = Object.keys(req.body).filter(
       (field) => !allowedFields.includes(field)
     );
 
@@ -38,32 +96,26 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       );
     }
 
-    // Fullname
     if (fullname !== undefined) {
       if (typeof fullname !== "string") {
         throw new AppError("Fullname must be a string", 400);
       }
 
-      const trimmedFullname = fullname.trim();
+      const value = fullname.trim();
 
-      if (trimmedFullname.length < 2) {
+      if (value.length < 2 || value.length > 120) {
         throw new AppError(
-          "Fullname must be at least 2 characters",
-          400
-        );
-      }
-
-      if (trimmedFullname.length > 120) {
-        throw new AppError(
-          "Fullname cannot exceed 120 characters",
+          "Fullname must be between 2 and 120 characters",
           400
         );
       }
     }
 
-    // Phone number
     if (phone_no !== undefined) {
-      if (phone_no !== null && typeof phone_no !== "string") {
+      if (
+        phone_no !== null &&
+        typeof phone_no !== "string"
+      ) {
         throw new AppError(
           "Phone number must be a string",
           400
@@ -81,20 +133,18 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       }
     }
 
-    // Birth date
     if (birth_date !== undefined) {
-      if (birth_date !== null && !isValidDate(birth_date)) {
-        throw new AppError(
-          "Invalid birth date",
-          400
-        );
+      if (
+        birth_date !== null &&
+        !isValidDate(birth_date)
+      ) {
+        throw new AppError("Invalid birth date", 400);
       }
 
       if (birth_date !== null) {
         const birthDate = new Date(birth_date);
-        const now = new Date();
 
-        if (birthDate > now) {
+        if (birthDate > new Date()) {
           throw new AppError(
             "Birth date cannot be in the future",
             400
@@ -103,9 +153,11 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       }
     }
 
-    // Gender
     if (gender !== undefined) {
-      if (gender !== null && typeof gender !== "string") {
+      if (
+        gender !== null &&
+        typeof gender !== "string"
+      ) {
         throw new AppError(
           "Gender must be a string",
           400
@@ -123,98 +175,8 @@ export const validatePatientProfileUpdate = (req, _res, next) => {
       }
     }
 
-    // Address
     if (address !== undefined) {
-      if (
-        address === null ||
-        typeof address !== "object" ||
-        Array.isArray(address)
-      ) {
-        throw new AppError(
-          "Address must be an object",
-          400
-        );
-      }
-
-      const allowedAddressFields = [
-        "country",
-        "city",
-        "state",
-        "zip",
-        "house_no",
-      ];
-
-      const unknownAddressFields = Object.keys(address).filter(
-        (field) => !allowedAddressFields.includes(field)
-      );
-
-      if (unknownAddressFields.length > 0) {
-        throw new AppError(
-          `Unknown address field(s): ${unknownAddressFields.join(", ")}`,
-          400
-        );
-      }
-
-      for (const field of allowedAddressFields) {
-        if (address[field] !== undefined && address[field] !== null) {
-          if (typeof address[field] !== "string") {
-            throw new AppError(
-              `Address ${field} must be a string`,
-              400
-            );
-          }
-        }
-      }
-
-      if (
-        typeof address.country === "string" &&
-        address.country.trim().length > 100
-      ) {
-        throw new AppError(
-          "Country cannot exceed 100 characters",
-          400
-        );
-      }
-
-      if (
-        typeof address.city === "string" &&
-        address.city.trim().length > 100
-      ) {
-        throw new AppError(
-          "City cannot exceed 100 characters",
-          400
-        );
-      }
-
-      if (
-        typeof address.state === "string" &&
-        address.state.trim().length > 100
-      ) {
-        throw new AppError(
-          "State cannot exceed 100 characters",
-          400
-        );
-      }
-
-      if (
-        typeof address.zip === "string" &&
-        address.zip.trim().length > 30
-      ) {
-        throw new AppError(
-          "ZIP/postal code cannot exceed 30 characters",
-          400
-        );
-      }
-
-      if (
-        typeof address.house_no === "string" &&
-        address.house_no.trim().length > 200
-      ) {
-        throw new AppError(
-          "House number/address cannot exceed 200 characters",
-          400
-        );
-      }
+      validateAddress(address);
     }
 
     next();

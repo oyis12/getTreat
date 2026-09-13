@@ -1,38 +1,70 @@
 import User from "../models/user.model.js";
-import  AppError  from "../utils/AppError.js";
+import PatientProfile from "../models/patient-profile.model.js";
+import AppError from "../utils/AppError.js";
+import { sanitizeUser } from "../utils/sanitize.js";
+import { deleteCloudinaryImage } from "../utils/cloudinary.js";
 
-const sanitizePatientProfile = (user) => {
-  if (!user) return null;
+const buildAddress = (currentAddress = {}, incomingAddress = {}) => ({
+  country:
+    incomingAddress.country !== undefined
+      ? incomingAddress.country?.trim() || null
+      : currentAddress.country ?? null,
 
-  return {
-    id: user._id.toString(),
-    fullname: user.fullname,
-    email: user.email,
-    phone_no: user.phone_no,
-    birth_date: user.birth_date,
-    gender: user.gender,
-    address: {
-      country: user.address?.country ?? null,
-      city: user.address?.city ?? null,
-      state: user.address?.state ?? null,
-      zip: user.address?.zip ?? null,
-      house_no: user.address?.house_no ?? null,
-    },
-    role: user.role,
-    emailVerified: user.emailVerified,
-    accountStatus: user.accountStatus,
-    profileCompleted: user.profileCompleted,
-    profileImage: user.profileImage,
-    lastLoginAt: user.lastLoginAt,
-    created_at: user.createdAt,
-    modified_at: user.modifiedAt,
-  };
-};
+  city:
+    incomingAddress.city !== undefined
+      ? incomingAddress.city?.trim() || null
+      : currentAddress.city ?? null,
 
-/**
- * Get authenticated patient's profile
- */
-export const getPatientProfile = async (userId) => {
+  state:
+    incomingAddress.state !== undefined
+      ? incomingAddress.state?.trim() || null
+      : currentAddress.state ?? null,
+
+  zip:
+    incomingAddress.zip !== undefined
+      ? incomingAddress.zip?.trim() || null
+      : currentAddress.zip ?? null,
+
+  house_no:
+    incomingAddress.house_no !== undefined
+      ? incomingAddress.house_no?.trim() || null
+      : currentAddress.house_no ?? null,
+});
+
+const calculateProfileCompleted = (profile) =>
+  Boolean(profile.phone_no?.trim()) &&
+  Boolean(profile.birth_date) &&
+  Boolean(profile.gender?.trim()) &&
+  Boolean(profile.address?.country?.trim()) &&
+  Boolean(profile.address?.state?.trim()) &&
+  Boolean(profile.address?.city?.trim());
+
+const sanitizePatientProfile = (user, profile) => ({
+  id: profile._id.toString(),
+  user_id: user._id.toString(),
+  fullname: user.fullname,
+  email: user.email,
+  phone_no: profile.phone_no,
+  birth_date: profile.birth_date,
+  gender: profile.gender,
+  address: {
+    country: profile.address?.country ?? null,
+    city: profile.address?.city ?? null,
+    state: profile.address?.state ?? null,
+    zip: profile.address?.zip ?? null,
+    house_no: profile.address?.house_no ?? null,
+  },
+  role: user.role,
+  emailVerified: user.emailVerified,
+  accountStatus: user.accountStatus,
+  profileCompleted: profile.profileCompleted,
+  profileImage: profile.profileImage,
+  lastLoginAt: user.lastLoginAt,
+  created_at: profile.createdAt,
+  modified_at: profile.modifiedAt,
+});
+
+const ensurePatientUser = async (userId) => {
   const user = await User.findById(userId);
 
   if (!user) {
@@ -50,43 +82,80 @@ export const getPatientProfile = async (userId) => {
     user.accountStatus === "suspended" ||
     user.accountStatus === "deactivated"
   ) {
-    throw new AppError(
-      "Your account cannot be accessed",
-      403
-    );
+    throw new AppError("Your account cannot be accessed", 403);
   }
 
-  return sanitizePatientProfile(user);
+  return user;
 };
 
-/**
- * Update authenticated patient's profile
- */
-export const updatePatientProfile = async (
+export const createPatientProfile = async (
   userId,
-  payload
+  initialData = {}
 ) => {
   const user = await User.findById(userId);
 
   if (!user) {
-    throw new AppError("Patient account not found", 404);
+    throw new AppError("User not found", 404);
   }
 
   if (user.role !== "patient") {
     throw new AppError(
-      "This profile endpoint is only available to patients",
+      "Only patient accounts can have a patient profile",
       403
     );
   }
 
-  if (
-    user.accountStatus === "suspended" ||
-    user.accountStatus === "deactivated"
-  ) {
+  const existingProfile = await PatientProfile.findOne({
+    user: user._id,
+  });
+
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  const profile = await PatientProfile.create({
+    user: user._id,
+    phone_no: initialData.phone_no?.trim() || null,
+    birth_date: initialData.birth_date || null,
+    gender: initialData.gender?.trim() || null,
+    address: initialData.address
+      ? buildAddress({}, initialData.address)
+      : {},
+    profileCompleted: false,
+  });
+
+  return profile;
+};
+
+export const getPatientProfile = async (userId) => {
+  const user = await ensurePatientUser(userId);
+
+  const profile = await PatientProfile.findOne({
+    user: user._id,
+  });
+
+  if (!profile) {
     throw new AppError(
-      "Your account cannot be updated",
-      403
+      "Patient profile not found. Please complete your profile.",
+      404
     );
+  }
+
+  return sanitizePatientProfile(user, profile);
+};
+
+export const updatePatientProfile = async (
+  userId,
+  payload
+) => {
+  const user = await ensurePatientUser(userId);
+
+  let profile = await PatientProfile.findOne({
+    user: user._id,
+  });
+
+  if (!profile) {
+    profile = await createPatientProfile(user._id);
   }
 
   const {
@@ -97,82 +166,144 @@ export const updatePatientProfile = async (
     address,
   } = payload;
 
-  // Fullname
   if (fullname !== undefined) {
     user.fullname = fullname.trim();
   }
 
-  // Phone
   if (phone_no !== undefined) {
-    user.phone_no =
+    profile.phone_no =
       phone_no === null
         ? null
         : phone_no.trim() || null;
   }
 
-  // Birth date
   if (birth_date !== undefined) {
-    user.birth_date = birth_date;
+    profile.birth_date = birth_date;
   }
 
-  // Gender
   if (gender !== undefined) {
-    user.gender =
+    profile.gender =
       gender === null
         ? null
         : gender.trim() || null;
   }
 
-  // Address
   if (address !== undefined) {
-    const currentAddress = user.address || {};
-
-    user.address = {
-      country:
-        address.country !== undefined
-          ? address.country?.trim() || null
-          : currentAddress.country ?? null,
-
-      city:
-        address.city !== undefined
-          ? address.city?.trim() || null
-          : currentAddress.city ?? null,
-
-      state:
-        address.state !== undefined
-          ? address.state?.trim() || null
-          : currentAddress.state ?? null,
-
-      zip:
-        address.zip !== undefined
-          ? address.zip?.trim() || null
-          : currentAddress.zip ?? null,
-
-      house_no:
-        address.house_no !== undefined
-          ? address.house_no?.trim() || null
-          : currentAddress.house_no ?? null,
-    };
+    profile.address = buildAddress(
+      profile.address || {},
+      address
+    );
   }
 
-  // Determine whether profile is actually complete
-  const hasRequiredProfileInformation =
-    Boolean(user.fullname?.trim()) &&
-    Boolean(user.phone_no?.trim()) &&
-    Boolean(user.birth_date) &&
-    Boolean(user.gender?.trim()) &&
-    Boolean(user.address?.country?.trim()) &&
-    Boolean(user.address?.state?.trim()) &&
-    Boolean(user.address?.city?.trim());
-
-  user.profileCompleted = hasRequiredProfileInformation;
+  profile.profileCompleted =
+    calculateProfileCompleted(profile);
 
   await user.save();
+  await profile.save();
 
-  return sanitizePatientProfile(user);
+  return sanitizePatientProfile(user, profile);
+};
+
+export const completePatientProfile = async (
+  userId,
+  payload
+) => {
+  const user = await ensurePatientUser(userId);
+
+  let profile = await PatientProfile.findOne({
+    user: user._id,
+  });
+
+  if (!profile) {
+    profile = await createPatientProfile(user._id);
+  }
+
+  const {
+    phone_no,
+    gender,
+    birth_date,
+    address,
+  } = payload;
+
+  if (phone_no !== undefined) {
+    profile.phone_no =
+      phone_no === null
+        ? null
+        : phone_no.trim() || null;
+  }
+
+  if (gender !== undefined) {
+    profile.gender =
+      gender === null
+        ? null
+        : gender.trim() || null;
+  }
+
+  if (birth_date !== undefined) {
+    profile.birth_date = birth_date;
+  }
+
+  if (address !== undefined) {
+    profile.address = buildAddress(
+      profile.address || {},
+      address
+    );
+  }
+
+  profile.profileCompleted =
+    calculateProfileCompleted(profile);
+
+  await profile.save();
+
+  return {
+    user: sanitizeUser(user),
+    profile: sanitizePatientProfile(user, profile),
+  };
+};
+
+export const updatePatientProfileImage = async (userId, { secure_url, public_id }) => {
+  const user = await ensurePatientUser(userId);
+
+  const profile = await PatientProfile.findOne({
+    user: user._id,
+  });
+
+  if (!profile) {
+    throw new AppError(
+      "Patient profile not found. Please complete your profile.",
+      404
+    );
+  }
+
+  if (!secure_url || !public_id) {
+    throw new AppError("Uploaded profile image is invalid", 400);
+  }
+
+  const previousPublicId = profile.profileImagePublicId;
+
+  profile.profileImage = secure_url;
+  profile.profileImagePublicId = public_id;
+
+  await profile.save();
+
+  if (previousPublicId && previousPublicId !== public_id) {
+    try {
+      await deleteCloudinaryImage(previousPublicId);
+    } catch (error) {
+      console.error("❌ Failed to delete previous profile image:", {
+        userId: user._id.toString(),
+        message: error.message,
+      });
+    }
+  }
+
+  return sanitizePatientProfile(user, profile);
 };
 
 export default {
+  createPatientProfile,
   getPatientProfile,
   updatePatientProfile,
+  completePatientProfile,
+  updatePatientProfileImage,
 };

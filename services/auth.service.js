@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import User from "../models/user.model.js";
+import * as patientProfileService from "./patient-profile.service.js";
 import Verification from "../models/verification.model.js";
 import RefreshToken from "../models/refresh-token.model.js";
+import PatientProfile from "../models/patient-profile.model.js";
 
 import  AppError  from "../utils/AppError.js";
 import {
@@ -114,23 +116,10 @@ export const signup = async (payload, req) => {
   const user = await User.create({
     fullname: fullname.trim(),
     email: normalizedEmail,
-    phone_no: phone_no?.trim() || undefined,
-    birth_date: birth_date || undefined,
     password: hashedPassword,
-
     role: role || "patient",
-
-    address: {
-      country: address?.country?.trim() || undefined,
-      city: address?.city?.trim() || undefined,
-      state: address?.state?.trim() || undefined,
-      zip: address?.zip?.trim() || undefined,
-      house_no: address?.house_no?.trim() || undefined,
-    },
-
     emailVerified: false,
     accountStatus: "pending",
-    profileCompleted: false,
 
     auth: {
       providers: {
@@ -139,31 +128,47 @@ export const signup = async (payload, req) => {
         },
         google: {
           enabled: false,
+          googleId: null,
         },
       },
     },
   });
 
-  const { code } = await createVerificationCode(
-    user,
-    "email_verification"
-  );
+  let patientProfile = null;
 
   try {
+    if (user.role === "patient") {
+      patientProfile =
+        await patientProfileService.createPatientProfile(
+          user._id,
+          {
+            phone_no,
+            birth_date,
+            address,
+          }
+        );
+    }
+
+    const { code } = await createVerificationCode(
+      user,
+      "email_verification"
+    );
+
     await sendVerificationEmail({
       email: user.email,
       fullname: user.fullname,
       code,
     });
   } catch (error) {
-    // Do not leave an unusable pending account if email delivery fails.
+    await PatientProfileCleanup(user);
     await User.findByIdAndDelete(user._id);
-    await Verification.deleteMany({
-      user: user._id,
-    });
+
+    if (error instanceof AppError) {
+      throw error;
+    }
 
     throw new AppError(
-      "Unable to send verification email. Please try again.",
+      "Unable to complete account registration. Please try again.",
       503
     );
   }
@@ -172,167 +177,121 @@ export const signup = async (payload, req) => {
     id: user.id,
     fullname: user.fullname,
     email: user.email,
-    phone_no: user.phone_no,
-    birth_date: user.birth_date,
-    address: user.address,
     role: user.role,
+    ...(patientProfile
+      ? {
+          profile: {
+            id: patientProfile._id.toString(),
+            profileCompleted:
+              patientProfile.profileCompleted,
+          },
+        }
+      : {}),
   };
 };
 
-export const signin = async (email, password, req) => {
-  console.log("🔵 SIGNIN SERVICE: started");
+async function PatientProfileCleanup(user) {
+  try {
+    await PatientProfile.deleteOne({
+      user: user._id,
+    });
+  } catch {
+    // Cleanup must not hide the original registration error.
+  }
 
   try {
-    console.log("🔵 SIGNIN SERVICE: normalizing email");
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    console.log(
-      "🔵 SIGNIN SERVICE: normalized email:",
-      normalizedEmail
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: looking up user..."
-    );
-
-    const user = await User.findOne({
-      email: normalizedEmail,
-    }).select("+password");
-
-    console.log(
-      "🔵 SIGNIN SERVICE: user found:",
-      !!user
-    );
-
-    if (!user) {
-      throw new AppError(
-        "Invalid email or password",
-        401
-      );
-    }
-
-    console.log(
-      "🔵 SIGNIN SERVICE: user id:",
-      user._id.toString()
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: account status:",
-      user.accountStatus
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: email verified:",
-      user.emailVerified
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: local auth enabled:",
-      user.auth?.providers?.local?.enabled
-    );
-
-    if (user.accountStatus === "suspended") {
-      throw new AppError(
-        "Your account has been suspended",
-        403
-      );
-    }
-
-    if (user.accountStatus === "deactivated") {
-      throw new AppError(
-        "Your account has been deactivated",
-        403
-      );
-    }
-
-    if (!user.auth?.providers?.local?.enabled) {
-      throw new AppError(
-        "Password authentication is not enabled for this account",
-        401
-      );
-    }
-
-    console.log(
-      "🔵 SIGNIN SERVICE: comparing password..."
-    );
-
-    const passwordMatches = await comparePassword(
-      password,
-      user.password
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: password matches:",
-      passwordMatches
-    );
-
-    if (!passwordMatches) {
-      throw new AppError(
-        "Invalid email or password",
-        401
-      );
-    }
-
-    if (!user.emailVerified) {
-      throw new AppError(
-        "Please verify your email before signing in",
-        403
-      );
-    }
-
-    console.log(
-      "🔵 SIGNIN SERVICE: updating last login..."
-    );
-
-    user.lastLoginAt = new Date();
-
-    if (user.accountStatus === "pending") {
-      user.accountStatus = "active";
-    }
-
-    await user.save();
-
-    console.log(
-      "🔵 SIGNIN SERVICE: user saved successfully"
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: issuing tokens..."
-    );
-
-    const tokens = await issueTokens(user, req);
-
-    console.log(
-      "🔵 SIGNIN SERVICE: tokens created successfully"
-    );
-
-    console.log(
-      "🔵 SIGNIN SERVICE: sanitizing user..."
-    );
-
-    const sanitized = sanitizeUser(user);
-
-    console.log(
-      "🔵 SIGNIN SERVICE: sanitize successful"
-    );
-
-    return {
-      user: sanitized,
-      ...tokens,
-    };
-
-  } catch (error) {
-    console.error(
-      "🔴 SIGNIN SERVICE ERROR:"
-    );
-
-    console.error("Name:", error.name);
-    console.error("Message:", error.message);
-    console.error("Stack:", error.stack);
-
-    throw error;
+    await Verification.deleteMany({
+      user: user._id,
+    });
+  } catch {
+    // Cleanup must not hide the original registration error.
   }
+}
+
+export const signin = async (email, password, req) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user = await User.findOne({
+    email: normalizedEmail,
+  }).select("+password");
+
+  if (!user) {
+    throw new AppError("Invalid email or password", 401);
+  }
+
+  if (user.accountStatus === "suspended") {
+    throw new AppError(
+      "Your account has been suspended",
+      403
+    );
+  }
+
+  if (user.accountStatus === "deactivated") {
+    throw new AppError(
+      "Your account has been deactivated",
+      403
+    );
+  }
+
+  if (!user.auth?.providers?.local?.enabled) {
+    throw new AppError(
+      "Password authentication is not enabled for this account",
+      401
+    );
+  }
+
+  const passwordMatches = await comparePassword(
+    password,
+    user.password
+  );
+
+  if (!passwordMatches) {
+    throw new AppError("Invalid email or password", 401);
+  }
+
+  if (!user.emailVerified) {
+    throw new AppError(
+      "Please verify your email before signing in",
+      403
+    );
+  }
+
+  user.lastLoginAt = new Date();
+
+  if (user.accountStatus === "pending") {
+    user.accountStatus = "active";
+  }
+
+  await user.save();
+
+  const tokens = await issueTokens(user, req);
+  const sanitized = sanitizeUser(user);
+
+  let profile = null;
+
+  if (user.role === "patient") {
+    const patientProfile =
+      await patientProfileService.createPatientProfile(
+        user._id
+      );
+
+    profile = {
+      id: patientProfile._id.toString(),
+      phone_no: patientProfile.phone_no,
+      birth_date: patientProfile.birth_date,
+      gender: patientProfile.gender,
+      address: patientProfile.address,
+      profileCompleted:
+        patientProfile.profileCompleted,
+      profileImage: patientProfile.profileImage,
+    };
+  }
+
+  return {
+    user: sanitized,
+    ...(profile ? { profile } : {}),
+    ...tokens,
+  };
 };
 
 export const verifyEmail = async (email, code) => {
@@ -600,88 +559,17 @@ export const completeProfile = async (userId, payload) => {
     throw new AppError("User not found", 404);
   }
 
-  if (
-    user.accountStatus === "suspended" ||
-    user.accountStatus === "deactivated"
-  ) {
-    throw new AppError("Your account cannot be updated", 403);
+  if (user.role === "patient") {
+    return patientProfileService.completePatientProfile(
+      userId,
+      payload
+    );
   }
 
-  const {
-    phone_no,
-    gender,
-    birth_date,
-    address,
-  } = payload;
-
-  // Phone number
-  if (phone_no !== undefined) {
-    user.phone_no = phone_no?.trim() || null;
-  }
-
-  // Gender
-  if (gender !== undefined) {
-    user.gender = gender?.trim() || null;
-  }
-
-  // Birth date
-  if (birth_date !== undefined) {
-    user.birth_date = birth_date;
-  }
-
-  // Address
-  if (address !== undefined) {
-    user.address = {
-      country:
-        address.country?.trim() ||
-        user.address?.country ||
-        null,
-
-      city:
-        address.city?.trim() ||
-        user.address?.city ||
-        null,
-
-      state:
-        address.state?.trim() ||
-        user.address?.state ||
-        null,
-
-      zip:
-        address.zip?.trim() ||
-        user.address?.zip ||
-        null,
-
-      house_no:
-        address.house_no?.trim() ||
-        user.address?.house_no ||
-        null,
-    };
-  }
-
-  user.profileCompleted = true;
-
-  await user.save();
-
-  return {
-    user: {
-      id: user._id.toString(),
-      fullname: user.fullname,
-      email: user.email,
-      phone_no: user.phone_no,
-      birth_date: user.birth_date,
-      gender: user.gender,
-      address: user.address,
-      role: user.role,
-      emailVerified: user.emailVerified,
-      accountStatus: user.accountStatus,
-      profileCompleted: user.profileCompleted,
-      profileImage: user.profileImage,
-      lastLoginAt: user.lastLoginAt,
-      created_at: user.createdAt,
-      modified_at: user.modifiedAt,
-    },
-  };
+  throw new AppError(
+    "Profile completion for this account type is not available yet",
+    422
+  );
 };
 
 export const refreshAccessToken = async (
