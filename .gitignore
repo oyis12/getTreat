@@ -18,6 +18,9 @@ doc.txt
 # agentic rules
 AGENTS.md
 
+# product  illustrations
+designs/
+
 # Dependency directories
 node_modules/
 jspm_packages/
