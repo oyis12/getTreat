@@ -1,4 +1,5 @@
 import express from "express";
+import passport from "passport";
 
 import {
   signup,
@@ -10,6 +11,8 @@ import {
   completeProfile,
   refreshToken,
   logout,
+  googleSuccess,
+  googleFailure,
 } from "../controllers/auth.controller.js";
 
 import {
@@ -24,10 +27,10 @@ import {
 } from "../validators/auth.validator.js";
 
 import { validate } from "../middlewares/validation.middleware.js";
-
-import { protect  } from "../middlewares/auth.middleware.js";
+import { protect } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
+
 
 router.post(
   "/signup",
@@ -35,7 +38,6 @@ router.post(
   validate,
   signup
 );
-
 
 router.post(
   "/signin",
@@ -58,7 +60,6 @@ router.post(
   resend
 );
 
-
 router.post(
   "/forgot-password",
   forgotPasswordValidator,
@@ -66,6 +67,7 @@ router.post(
   forgotPassword
 );
 
+// Backward-compatible alias
 router.post(
   "/forget-password",
   forgotPasswordValidator,
@@ -82,12 +84,11 @@ router.post(
 
 router.post(
   "/complete-profile",
-  protect ,
+  protect,
   completeProfileValidator,
   validate,
   completeProfile
 );
-
 
 router.post(
   "/refresh-token",
@@ -101,6 +102,29 @@ router.post(
   refreshTokenValidator,
   validate,
   logout
+);
+
+router.get(
+  "/google",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    session: false,
+  })
+);
+
+
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: "/api/auth/google/failure",
+  }),
+  googleSuccess
+);
+
+router.get(
+  "/google/failure",
+  googleFailure
 );
 
 export default router;

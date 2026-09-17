@@ -38,7 +38,7 @@ export const env = {
 
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL || "http://localhost:7700/auth/google/callback",
+  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL || "https://gettreat.onrender.com/api/auth/google/callback",
 
   accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
 

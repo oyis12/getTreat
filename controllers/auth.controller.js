@@ -166,3 +166,26 @@ export const logout = async (req, res, next) => {
     next(error);
   }
 };
+
+
+export const googleSuccess = async (req, res, next) => {
+   try { 
+    if (!req.user) { 
+      throw new AppError( "Google authentication failed", 401 );
+     } 
+     const data = await authService.googleSignin( req.user, req ); 
+     /** * Temporary development response. * * Once the frontend Google callback page is ready, * redirect here instead. */ 
+     return sendSuccess(res, { 
+      statusCode: 200,
+       msg: "Successfully authenticated with Google",
+        data,
+       }); 
+      } catch (error) { next(error); } 
+    };
+
+ export const googleFailure = async (req, res) => { 
+  return res.status(401).json({ 
+    success: false,
+     message: "Google authentication failed",
+     })
+    };

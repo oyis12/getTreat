@@ -710,9 +710,74 @@ export const logout = async (refreshToken) => {
   return null;
 };
 
+export const googleSignin = async (user, req) => {
+  if (!user) {
+    throw new AppError(
+      "Google authentication failed",
+      401
+    );
+  }
+
+  if (user.accountStatus === "suspended") {
+    throw new AppError(
+      "Your account has been suspended",
+      403
+    );
+  }
+
+  if (user.accountStatus === "deactivated") {
+    throw new AppError(
+      "Your account has been deactivated",
+      403
+    );
+  }
+
+  user.emailVerified = true;
+
+  if (user.accountStatus === "pending") {
+    user.accountStatus = "active";
+  }
+
+  user.lastLoginAt = new Date();
+
+  await user.save();
+
+  const tokens = await issueTokens(user, req);
+
+  const sanitized = sanitizeUser(user);
+
+  let profile = null;
+
+  if (user.role === "patient") {
+    const patientProfile =
+      await patientProfileService.createPatientProfile(
+        user._id
+      );
+
+    profile = {
+      id: patientProfile._id.toString(),
+      phone_no: patientProfile.phone_no,
+      birth_date: patientProfile.birth_date,
+      gender: patientProfile.gender,
+      address: patientProfile.address,
+      profileCompleted:
+        patientProfile.profileCompleted,
+      profileImage: patientProfile.profileImage,
+    };
+  }
+
+  return {
+    user: sanitized,
+    ...(profile ? { profile } : {}),
+    ...tokens,
+  };
+};
+
+
 export default {
   signup,
   signin,
+  googleSignin,
   verifyEmail,
   resendVerification,
   forgotPassword,
