@@ -38,7 +38,7 @@ export const signin = async (req, res, next) => {
 
 export const verify = async (req, res, next) => {
   try {
-    await authService.verifyEmail(
+    const data = await authService.verifyEmail(
       req.body.email,
       req.body.code
     );
@@ -46,7 +46,7 @@ export const verify = async (req, res, next) => {
     return sendSuccess(res, {
       statusCode: 200,
       msg: "Email verified successfully",
-      data: null,
+      data,
     });
   } catch (error) {
     next(error);

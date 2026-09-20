@@ -104,6 +104,22 @@ const userSchema = new Schema(
       index: true,
     },
 
+    // Server-controlled onboarding state. Clients must never mass-assign this field.
+    page: {
+      type: String,
+      enum: {
+        values: [
+          "verify",
+          "complete_profile",
+          "preferences",
+          "dashboard",
+        ],
+        message: "Invalid onboarding page",
+      },
+      default: "verify",
+      index: true,
+    },
+
     lastLoginAt: {
       type: Date,
       default: null,
@@ -133,7 +149,7 @@ userSchema.pre("save", function (next) {
     this.email = this.email.toLowerCase().trim();
   }
 
-  //next();
+  // next();
 });
 
 userSchema.set("toJSON", {

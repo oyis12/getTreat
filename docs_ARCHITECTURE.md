@@ -17,7 +17,10 @@ User
 A role-specific profile references the owning `User` through `user`.
 
 Do not put pregnancy, baby, provider professional data, appointments,
-transactions or other domain records directly on `User`.
+transactions or other domain records directly on `User`. Pregnancy belongs to the
+patient domain and, under the current product decision, the current pregnancy state
+is embedded inside `PatientProfile` rather than represented by a separate top-level
+Pregnancy collection.
 
 ## Current refactor
 
@@ -42,3 +45,16 @@ New patient signups automatically create their `PatientProfile`.
 Provider/Admin domain models should be added only after their approved
 Figma flows and requirements are mapped, so their schemas are not invented
 prematurely.
+
+
+## Onboarding page state
+
+`User.page` is a server-controlled onboarding state, not a general UI-screen field.
+For the patient flow its approved values are:
+
+```text
+verify → complete_profile → preferences → dashboard
+```
+
+The backend advances this state only after the corresponding operation succeeds.
+Clients cannot freely assign it.

@@ -120,6 +120,7 @@ export const signup = async (payload, req) => {
     role: role || "patient",
     emailVerified: false,
     accountStatus: "pending",
+    page: "verify",
 
     auth: {
       providers: {
@@ -178,6 +179,7 @@ export const signup = async (payload, req) => {
     fullname: user.fullname,
     email: user.email,
     role: user.role,
+    page: user.page,
     ...(patientProfile
       ? {
           profile: {
@@ -260,6 +262,15 @@ export const signin = async (email, password, req) => {
 
   if (user.accountStatus === "pending") {
     user.accountStatus = "active";
+  }
+
+  // Older accounts created before onboarding page state existed may not have
+  // a page value. Preserve access for those accounts instead of forcing them
+  // back into a new onboarding flow.
+  if (!user.page) {
+    user.page = user.emailVerified
+      ? "dashboard"
+      : "verify";
   }
 
   await user.save();
@@ -374,9 +385,17 @@ export const verifyEmail = async (email, code) => {
   user.emailVerified = true;
   user.accountStatus = "active";
 
+  // Patient onboarding continues to profile completion after email verification.
+  // Other roles do not use the patient onboarding flow yet.
+  user.page = user.role === "patient"
+    ? "complete_profile"
+    : "dashboard";
+
   await user.save();
 
-  return null;
+  return {
+    page: user.page,
+  };
 };
 
 export const resendVerification = async (email) => {
@@ -559,17 +578,28 @@ export const completeProfile = async (userId, payload) => {
     throw new AppError("User not found", 404);
   }
 
-  if (user.role === "patient") {
-    return patientProfileService.completePatientProfile(
-      userId,
-      payload
+  if (user.role !== "patient") {
+    throw new AppError(
+      "Profile completion for this account type is not available yet",
+      422
     );
   }
 
-  throw new AppError(
-    "Profile completion for this account type is not available yet",
-    422
+  const result = await patientProfileService.completePatientProfile(
+    userId,
+    payload
   );
+
+  // Only advance onboarding after the profile operation actually produced a
+  // complete profile. Partial profile updates must not skip the onboarding step.
+  if (result.profile.profileCompleted) {
+    user.page = "preferences";
+    await user.save();
+
+    result.user = sanitizeUser(user);
+  }
+
+  return result;
 };
 
 export const refreshAccessToken = async (
@@ -736,6 +766,12 @@ export const googleSignin = async (user, req) => {
 
   if (user.accountStatus === "pending") {
     user.accountStatus = "active";
+  }
+
+  if (!user.page) {
+    user.page = user.role === "patient"
+      ? "complete_profile"
+      : "dashboard";
   }
 
   user.lastLoginAt = new Date();

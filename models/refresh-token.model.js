@@ -65,10 +65,8 @@ refreshTokenSchema.index({
 
 
 refreshTokenSchema.index(
-  // { expiresAt: 1 },
-  {
-    expireAfterSeconds: 0,
-  }
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0 }
 );
 
 const RefreshToken = mongoose.model(

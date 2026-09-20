@@ -27,6 +27,7 @@ export const sanitizeUser = (user) => {
     role: source.role,
     emailVerified: source.emailVerified,
     accountStatus: source.accountStatus,
+    page: source.page || null,
     lastLoginAt: source.lastLoginAt,
     created_at:
       source.createdAt || source.created_at,

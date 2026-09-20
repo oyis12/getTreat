@@ -52,6 +52,8 @@ const patientProfileSchema = new Schema(
       required: [true, "Patient profile user is required"],
       unique: true,
     },
+    
+   service_type: {type:[String],ref:"Services"},
 
     phone_no: {
       type: String,
@@ -82,6 +84,10 @@ const patientProfileSchema = new Schema(
       trim: true,
       default: null,
     },
+
+    pregnancy:{},
+
+    medical_conditions:[],
 
     profileImagePublicId: {
       type: String,

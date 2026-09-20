@@ -84,7 +84,7 @@ export const configurePassport = () => {
 
             emailVerified: true,
             accountStatus: "active",
-            profileCompleted: false,
+            page: "complete_profile",
             role: "patient",
           });
 

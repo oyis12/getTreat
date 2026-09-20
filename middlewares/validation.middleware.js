@@ -10,12 +10,11 @@ export const validate = (req, res, next) => {
       message: error.msg,
     }));
 
-    return sendError(
-      res,
-      400,
-      "Validation failed",
-      formattedErrors
-    );
+    return sendError(res, {
+      statusCode: 400,
+      msg: "Validation failed",
+      data: formattedErrors,
+    });
   }
 
   next();
