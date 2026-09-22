@@ -149,7 +149,6 @@ userSchema.pre("save", function (next) {
     this.email = this.email.toLowerCase().trim();
   }
 
-  // next();
 });
 
 userSchema.set("toJSON", {

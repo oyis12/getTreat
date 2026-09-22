@@ -58,3 +58,17 @@ verify → complete_profile → preferences → dashboard
 
 The backend advances this state only after the corresponding operation succeeds.
 Clients cannot freely assign it.
+
+
+## Patient services and subscriptions
+
+Patient self-service endpoints use `/api/user/me`. `/api/patient` is reserved for
+provider/admin access to patient records.
+
+`PatientProfile.service_type` references the `Service` catalogue.
+`PatientProfile.preferred_service_categories` stores broad registration choices.
+
+Platform subscription and provider subscription are separate domains. Platform
+subscription configuration is stored in the singleton `System` document and is currently
+monthly. Provider subscriptions are patient-to-provider service relationships and may
+be monthly, quarterly or yearly; provider rates/discounts belong to that domain.

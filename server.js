@@ -9,7 +9,14 @@ import { configurePassport } from "./config/passport.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 
 import authRoutes from "./routes/auth.routes.js";
-import patientProfileRoutes from "./routes/patient-profile.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import serviceRoutes from "./routes/service.routes.js";
+import pregnancyRoutes from "./routes/pregnancy.routes.js";
+import healthConditionRoutes from "./routes/health-condition.routes.js";
+import healthAssessmentRoutes from "./routes/health-assessment.routes.js";
+import pregnancyHealthConditionRoutes from "./routes/pregnancy-health-condition.routes.js";
+import adminHealthConditionRoutes from "./routes/admin-health-condition.routes.js";
+import systemRoutes from "./routes/system.routes.js";
 
 
 
@@ -48,7 +55,14 @@ app.use(express.json({ limit: '10kb' }));
 
 //Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/patient", patientProfileRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/services", serviceRoutes);
+app.use("/api/health-conditions", healthConditionRoutes);
+app.use("/api/admin/health-conditions", adminHealthConditionRoutes);
+app.use("/api/system", systemRoutes);
+app.use("/api/user", pregnancyRoutes);
+app.use("/api/user", healthAssessmentRoutes);
+app.use("/api/user", pregnancyHealthConditionRoutes);
 
 
 app.use(errorMiddleware);

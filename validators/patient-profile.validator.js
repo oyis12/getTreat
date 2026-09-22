@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import AppError from "../utils/AppError.js";
 
 const isValidDate = (value) => {
@@ -75,6 +76,8 @@ export const validatePatientProfileUpdate = (
       birth_date,
       gender,
       address,
+      preferred_service_categories,
+      service_type,
     } = req.body;
 
     const allowedFields = [
@@ -83,6 +86,8 @@ export const validatePatientProfileUpdate = (
       "birth_date",
       "gender",
       "address",
+      "preferred_service_categories",
+      "service_type",
     ];
 
     const unknownFields = Object.keys(req.body).filter(
@@ -177,6 +182,53 @@ export const validatePatientProfileUpdate = (
 
     if (address !== undefined) {
       validateAddress(address);
+    }
+
+
+    if (preferred_service_categories !== undefined) {
+      if (!Array.isArray(preferred_service_categories)) {
+        throw new AppError(
+          "Preferred service categories must be an array",
+          400
+        );
+      }
+
+      const allowedCategories = ["pregnancy_care", "newborn_care"];
+      const invalidCategories = preferred_service_categories.filter(
+        (category) => !allowedCategories.includes(category)
+      );
+
+      if (invalidCategories.length > 0) {
+        throw new AppError(
+          `Invalid service category: ${invalidCategories[0]}`,
+          400
+        );
+      }
+
+      if (new Set(preferred_service_categories).size !== preferred_service_categories.length) {
+        throw new AppError(
+          "Preferred service categories cannot contain duplicates",
+          400
+        );
+      }
+    }
+
+    if (service_type !== undefined) {
+      if (!Array.isArray(service_type)) {
+        throw new AppError("Service type must be an array", 400);
+      }
+
+      const invalidServiceId = service_type.find(
+        (id) => !mongoose.isValidObjectId(id)
+      );
+
+      if (invalidServiceId) {
+        throw new AppError("One or more service IDs are invalid", 400);
+      }
+
+      if (new Set(service_type.map(String)).size !== service_type.length) {
+        throw new AppError("Service type cannot contain duplicates", 400);
+      }
     }
 
     next();

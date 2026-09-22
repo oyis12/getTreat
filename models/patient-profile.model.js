@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import pregnancySchema from "./pregnancy.model.js";
 
 const { Schema } = mongoose;
 
@@ -53,7 +54,17 @@ const patientProfileSchema = new Schema(
       unique: true,
     },
     
-   service_type: {type:[String],ref:"Services"},
+    preferred_service_categories: {
+      type: [String],
+      enum: ["pregnancy_care", "newborn_care"],
+      default: [],
+    },
+
+    service_type: {
+      type: [Schema.Types.ObjectId],
+      ref: "Service",
+      default: [],
+    },
 
     phone_no: {
       type: String,
@@ -85,9 +96,10 @@ const patientProfileSchema = new Schema(
       default: null,
     },
 
-    pregnancy:{},
-
-    medical_conditions:[],
+    pregnancies: {
+      type: [pregnancySchema],
+      default: [],
+    },
 
     profileImagePublicId: {
       type: String,
