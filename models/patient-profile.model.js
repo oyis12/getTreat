@@ -45,6 +45,69 @@ const addressSchema = new Schema(
   }
 );
 
+const bloodPressureSchema = new Schema(
+  {
+    systolic: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    diastolic: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
+
+const sugarLevelSchema = new Schema(
+  {
+    value: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    unit: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+    },
+  },
+  { _id: false }
+);
+
+const vitalSchema = new Schema(
+  {
+    pregnancy_id: {
+      type: Schema.Types.ObjectId,
+      default: null,
+    },
+
+    blood_pressure: {
+      type: bloodPressureSchema,
+      default: null,
+    },
+
+    sugar_level: {
+      type: sugarLevelSchema,
+      default: null,
+    },
+
+    recorded_at: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: true,
+    timestamps: true,
+  }
+);
+
 const patientProfileSchema = new Schema(
   {
     user: {
@@ -88,6 +151,11 @@ const patientProfileSchema = new Schema(
     address: {
       type: addressSchema,
       default: () => ({}),
+    },
+
+    vitals: {
+      type: [vitalSchema],
+      default: [],
     },
 
     profileImage: {

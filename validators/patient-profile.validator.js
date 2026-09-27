@@ -238,3 +238,149 @@ export const validatePatientProfileUpdate = (
 };
 
 export default validatePatientProfileUpdate;
+
+const validateVitalNumber = (value, fieldName) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new AppError(`${fieldName} must be a finite number`, 400);
+  }
+
+  if (value < 0) {
+    throw new AppError(`${fieldName} cannot be negative`, 400);
+  }
+};
+
+const validateBloodPressure = (value, { partial = false } = {}) => {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    throw new AppError("Blood pressure must be an object", 400);
+  }
+
+  const allowedFields = ["systolic", "diastolic"];
+  const unknownFields = Object.keys(value).filter(
+    (field) => !allowedFields.includes(field)
+  );
+
+  if (unknownFields.length > 0) {
+    throw new AppError(
+      `Unknown blood pressure field(s): ${unknownFields.join(", ")}`,
+      400
+    );
+  }
+
+  if (!partial && (value.systolic === undefined || value.diastolic === undefined)) {
+    throw new AppError(
+      "Blood pressure must include systolic and diastolic values",
+      400
+    );
+  }
+
+  if (value.systolic !== undefined) {
+    validateVitalNumber(value.systolic, "Systolic blood pressure");
+  }
+
+  if (value.diastolic !== undefined) {
+    validateVitalNumber(value.diastolic, "Diastolic blood pressure");
+  }
+};
+
+const validateSugarLevel = (value, { partial = false } = {}) => {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    throw new AppError("Sugar level must be an object", 400);
+  }
+
+  const allowedFields = ["value", "unit"];
+  const unknownFields = Object.keys(value).filter(
+    (field) => !allowedFields.includes(field)
+  );
+
+  if (unknownFields.length > 0) {
+    throw new AppError(
+      `Unknown sugar level field(s): ${unknownFields.join(", ")}`,
+      400
+    );
+  }
+
+  if (!partial && (value.value === undefined || value.unit === undefined)) {
+    throw new AppError(
+      "Sugar level must include value and unit",
+      400
+    );
+  }
+
+  if (value.value !== undefined) {
+    validateVitalNumber(value.value, "Sugar level");
+  }
+
+  if (value.unit !== undefined) {
+    if (typeof value.unit !== "string" || !["mg/dl", "mmol/l"].includes(value.unit.trim().toLowerCase())) {
+      throw new AppError("Sugar level unit must be mg/dL or mmol/L", 400);
+    }
+  }
+};
+
+const validateVitalPayload = (req, { partial = false } = {}) => {
+  const body = req.body ?? {};
+  const allowedFields = ["blood_pressure", "sugar_level"];
+
+  const unknownFields = Object.keys(body).filter(
+    (field) => !allowedFields.includes(field)
+  );
+
+  if (unknownFields.length > 0) {
+    throw new AppError(
+      `Unknown vital field(s): ${unknownFields.join(", ")}`,
+      400
+    );
+  }
+
+  if (!partial) {
+    if (body.blood_pressure === undefined) {
+      throw new AppError("Blood pressure is required", 400);
+    }
+
+    if (body.sugar_level === undefined) {
+      throw new AppError("Sugar level is required", 400);
+    }
+  } else if (
+    body.blood_pressure === undefined &&
+    body.sugar_level === undefined
+  ) {
+    throw new AppError(
+      "At least one vital measurement is required",
+      400
+    );
+  }
+
+  if (body.blood_pressure !== undefined) {
+    validateBloodPressure(body.blood_pressure, { partial });
+  }
+
+  if (body.sugar_level !== undefined) {
+    validateSugarLevel(body.sugar_level, { partial });
+  }
+};
+
+export const validateRecordVital = (req, _res, next) => {
+  try {
+    validateVitalPayload(req, { partial: false });
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const validateUpdateVital = (req, _res, next) => {
+  try {
+    validateVitalPayload(req, { partial: true });
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

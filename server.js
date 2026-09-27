@@ -17,6 +17,7 @@ import healthAssessmentRoutes from "./routes/health-assessment.routes.js";
 import pregnancyHealthConditionRoutes from "./routes/pregnancy-health-condition.routes.js";
 import adminHealthConditionRoutes from "./routes/admin-health-condition.routes.js";
 import systemRoutes from "./routes/system.routes.js";
+import vitalsRoutes from "./routes/vitals.routes.js";
 
 
 
@@ -63,6 +64,7 @@ app.use("/api/system", systemRoutes);
 app.use("/api/user", pregnancyRoutes);
 app.use("/api/user", healthAssessmentRoutes);
 app.use("/api/user", pregnancyHealthConditionRoutes);
+app.use("/api/user", vitalsRoutes);
 
 
 app.use(errorMiddleware);
