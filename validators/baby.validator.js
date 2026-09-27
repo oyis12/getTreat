@@ -381,3 +381,73 @@ export const validateUpdateBaby = (
     next(error);
   }
 };
+const ALLOWED_GROWTH_FIELDS = [
+  "recorded_at",
+  "weight",
+  "length",
+  "head_circumference",
+];
+
+export const validateAddBabyGrowth = (req, _res, next) => {
+  try {
+    const body = req.body ?? {};
+
+    validateUnknownFields(body, ALLOWED_GROWTH_FIELDS);
+
+    if (
+      body.weight === undefined &&
+      body.length === undefined &&
+      body.head_circumference === undefined
+    ) {
+      throw new AppError(
+        "At least one growth measurement is required",
+        400
+      );
+    }
+
+    if (body.recorded_at !== undefined) {
+      if (
+        body.recorded_at === null ||
+        body.recorded_at === "" ||
+        !isValidDate(body.recorded_at)
+      ) {
+        throw new AppError(
+          "recorded_at must be a valid date",
+          400
+        );
+      }
+
+      if (isFutureDate(body.recorded_at)) {
+        throw new AppError(
+          "recorded_at cannot be in the future",
+          400
+        );
+      }
+    }
+
+    if (body.weight !== undefined) {
+      validateMeasurement(body.weight, "weight", WEIGHT_UNITS, {
+        allowNull: false,
+      });
+    }
+
+    if (body.length !== undefined) {
+      validateMeasurement(body.length, "length", LENGTH_UNITS, {
+        allowNull: false,
+      });
+    }
+
+    if (body.head_circumference !== undefined) {
+      validateMeasurement(
+        body.head_circumference,
+        "head_circumference",
+        LENGTH_UNITS,
+        { allowNull: false }
+      );
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

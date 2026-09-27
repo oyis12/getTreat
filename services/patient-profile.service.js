@@ -36,42 +36,6 @@ const calculateProfileCompleted = (profile) =>
   Boolean(profile.address?.state?.trim()) &&
   Boolean(profile.address?.city?.trim());
 
-const serializeVital = (vital) => ({
-  id: vital._id.toString(),
-  pregnancy_id: vital.pregnancy_id ? vital.pregnancy_id.toString() : null,
-  blood_pressure: vital.blood_pressure
-    ? {
-        systolic: vital.blood_pressure.systolic,
-        diastolic: vital.blood_pressure.diastolic,
-        unit: "mmHg",
-      }
-    : null,
-  sugar_level: vital.sugar_level
-    ? {
-        value: vital.sugar_level.value,
-        unit: vital.sugar_level.unit,
-      }
-    : null,
-  recorded_at: vital.recorded_at,
-  created_at: vital.createdAt,
-  modified_at: vital.updatedAt,
-});
-
-const buildVitalsSummary = (vitals = []) => {
-  const latestVital = vitals
-    .slice()
-    .sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))[0] ?? null;
-
-  const latest = latestVital ? serializeVital(latestVital) : null;
-
-  return {
-    latest_blood_pressure: latest?.blood_pressure ?? null,
-    latest_sugar_level: latest?.sugar_level ?? null,
-    last_recorded_at: latest?.recorded_at ?? null,
-    total_records: vitals.length,
-  };
-};
-
 const serializeHealthCondition = (item) => ({
   id: item._id.toString(),
   condition:
@@ -175,11 +139,6 @@ const sanitizePatientProfile = (user, profile) => {
       .slice()
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .map(serializePregnancy),
-    vitals: (profile.vitals ?? [])
-      .slice()
-      .sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))
-      .map(serializeVital),
-    vitals_summary: buildVitalsSummary(profile.vitals ?? []),
     role: user.role,
     emailVerified: user.emailVerified,
     accountStatus: user.accountStatus,

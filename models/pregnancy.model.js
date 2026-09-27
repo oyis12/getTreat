@@ -167,6 +167,39 @@ const babyMeasurementSchema = new Schema(
   }
 );
 
+const babyGrowthRecordSchema = new Schema(
+  {
+    recorded_at: {
+      type: Date,
+      default: Date.now,
+    },
+
+    weight: {
+      type: babyMeasurementSchema,
+      default: null,
+    },
+
+    length: {
+      type: babyMeasurementSchema,
+      default: null,
+    },
+
+    head_circumference: {
+      type: babyMeasurementSchema,
+      default: null,
+    },
+
+    source: {
+      type: String,
+      enum: ["registration", "patient_update"],
+      default: "patient_update",
+    },
+  },
+  {
+    _id: true,
+  }
+);
+
 const babySchema = new Schema(
   {
     full_name: {
@@ -203,6 +236,11 @@ const babySchema = new Schema(
     head_circumference: {
       type: babyMeasurementSchema,
       default: null,
+    },
+
+    growth_history: {
+      type: [babyGrowthRecordSchema],
+      default: [],
     },
 
   photos: {
@@ -330,6 +368,7 @@ export {
   babySchema,
   babyPhotoSchema,
   babyMeasurementSchema,
+  babyGrowthRecordSchema,
   pregnancyHealthConditionSchema,
   healthAssessmentAnswerSchema,
   healthAssessmentSchema,

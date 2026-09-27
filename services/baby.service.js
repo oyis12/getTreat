@@ -96,6 +96,18 @@ const serializeBaby = (baby) => ({
     baby.head_circumference
   ),
 
+  growth_history: (baby.growth_history ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))
+    .map((record) => ({
+      id: record._id.toString(),
+      recorded_at: record.recorded_at,
+      weight: serializeMeasurement(record.weight),
+      length: serializeMeasurement(record.length),
+      head_circumference: serializeMeasurement(record.head_circumference),
+      source: record.source,
+    })),
+
   photos: (baby.photos ?? []).map((photo) => ({
     id: photo._id.toString(),
     url: photo.url,
@@ -211,6 +223,16 @@ export const createBaby = async (userId, payload) => {
   const baby =
     pregnancy.babies[pregnancy.babies.length - 1];
 
+  if (baby.weight || baby.length || baby.head_circumference) {
+    baby.growth_history.push({
+      recorded_at: baby.createdAt ?? new Date(),
+      weight: baby.weight ?? null,
+      length: baby.length ?? null,
+      head_circumference: baby.head_circumference ?? null,
+      source: "registration",
+    });
+  }
+
   await profile.save();
 
   return serializeBaby(baby);
@@ -273,28 +295,45 @@ export const updateBaby = async (
       .trim();
   }
 
+  const growthMeasurement = {};
+
   if (payload.weight !== undefined) {
-    baby.weight = normalizeMeasurement(
+    growthMeasurement.weight = normalizeMeasurement(
       payload.weight,
       "weight"
     );
   }
 
   if (payload.length !== undefined) {
-    baby.length = normalizeMeasurement(
+    growthMeasurement.length = normalizeMeasurement(
       payload.length,
       "length"
     );
   }
 
-  if (
-    payload.head_circumference !== undefined
-  ) {
-    baby.head_circumference =
+  if (payload.head_circumference !== undefined) {
+    growthMeasurement.head_circumference =
       normalizeMeasurement(
         payload.head_circumference,
         "head_circumference"
       );
+  }
+
+  if (Object.keys(growthMeasurement).length > 0) {
+    baby.growth_history.push({
+      recorded_at: new Date(),
+      weight: growthMeasurement.weight ?? null,
+      length: growthMeasurement.length ?? null,
+      head_circumference: growthMeasurement.head_circumference ?? null,
+      source: "patient_update",
+    });
+
+    // Keep the legacy fields synchronized with the latest values.
+    if (growthMeasurement.weight) baby.weight = growthMeasurement.weight;
+    if (growthMeasurement.length) baby.length = growthMeasurement.length;
+    if (growthMeasurement.head_circumference) {
+      baby.head_circumference = growthMeasurement.head_circumference;
+    }
   }
 
   await profile.save();

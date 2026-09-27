@@ -82,11 +82,6 @@ const sugarLevelSchema = new Schema(
 
 const vitalSchema = new Schema(
   {
-    pregnancy_id: {
-      type: Schema.Types.ObjectId,
-      default: null,
-    },
-
     blood_pressure: {
       type: bloodPressureSchema,
       default: null,
