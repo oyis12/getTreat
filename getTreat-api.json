@@ -1,0 +1,1986 @@
+{
+  "document": {
+    "name": "GetTreat Frontend API Reference",
+    "version": "2026-10-02",
+    "base_url": "{{API_BASE_URL}}",
+    "purpose": "Clean frontend integration reference for the currently registered GetTreat backend APIs.",
+    "source_snapshots": [
+      "getTreat-4I-complete-with-migration.zip",
+      "getTreat-4H6-vital-history-report.zip"
+    ],
+    "snapshot_note": "getTreat api integration",
+    "response_contract": {
+      "success": {
+        "success": true,
+        "msg": "Human-readable outcome",
+        "data": {}
+      },
+      "error": {
+        "success": false,
+        "msg": "Human-readable error",
+        "data": null
+      },
+      "note": "The current backend's error response does not consistently include an errors array. Frontend should use success, msg and data."
+    },
+    "authentication": {
+      "access_token": "Send Authorization: Bearer <access_token> on protected requests.",
+      "refresh_token": "POST /api/auth/refresh-token with refresh_token. The backend rotates the refresh token.",
+      "logout": "POST /api/auth/logout with refresh_token.",
+      "ownership": "Patient-owned resources are resolved from the authenticated user. Do not send patientId/userId to claim ownership."
+    },
+    "frontend_safety": [
+      "Do not mass-assign role, accountStatus, emailVerified, page, permissions, ownership IDs, password hashes or Google IDs.",
+      "Use multipart/form-data for profile and baby photo uploads with the exact documented field names.",
+      "Health assessment score/result_status are server-controlled. Current implementation does not calculate a clinical score.",
+      "Baby Progress percentiles and developmental milestones are placeholders pending approved clinical reference data.",
+      "Vitals are stored/returned without clinical interpretation."
+    ],
+    "implementation_order": [
+      "Authentication & onboarding",
+      "Current user/patient profile",
+      "Pregnancy",
+      "Health condition catalogue",
+      "Pregnancy health assessments",
+      "Pregnancy health conditions",
+      "My Baby",
+      "My Vitals",
+      "My Baby Progress",
+      "Service catalogue/system configuration",
+      "Admin health-condition management"
+    ],
+    "route_mounts": {
+      "/api/auth": "auth.routes.js",
+      "/api/user": "user.routes.js",
+      "/api/services": "service.routes.js",
+      "/api/health-conditions": "health-condition.routes.js",
+      "/api/admin/health-conditions": "admin-health-condition.routes.js",
+      "/api/system": "system.routes.js",
+      "/api/user (pregnancy)": "pregnancy.routes.js",
+      "/api/user (health assessments)": "health-assessment.routes.js",
+      "/api/user (pregnancy health conditions)": "pregnancy-health-condition.routes.js",
+      "/api/user (vitals)": "vitals.routes.js",
+      "/api/user/babies": "baby-progress.routes.js",
+      "/api/user/me/babies": "baby.routes.js via user.routes.js"
+    }
+  },
+  "endpoint_groups": [
+    {
+      "name": "Authentication",
+      "base_path": "/api/auth",
+      "description": "Signup, verification, password recovery, onboarding, JWT refresh/logout and Google OAuth.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/auth/signup",
+          "summary": "Create account",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "fullname": "string, required, 2-100 chars",
+              "email": "string, required, valid email",
+              "phone_no": "string, optional",
+              "birth_date": "ISO date, optional",
+              "address": {
+                "country": "string",
+                "state": "string",
+                "city": "string",
+                "zip": "string",
+                "house_no": "string"
+              },
+              "role": "patient|provider, optional; defaults to patient",
+              "password": "string, required, minimum 8 chars"
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "User saved successfully",
+            "data": {
+              "id": "USER_ID",
+              "fullname": "Jane Doe",
+              "email": "jane@example.com",
+              "role": "patient",
+              "page": "verify",
+              "profile": {
+                "id": "PROFILE_ID",
+                "profileCompleted": false
+              }
+            }
+          },
+          "common_errors": [
+            400,
+            409,
+            503
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/signin",
+          "summary": "Sign in with email/password",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string",
+              "password": "string"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Successfully authenticated",
+            "data": {
+              "user": "SANITIZED_USER",
+              "profile": "PATIENT_PROFILE_OR_NULL",
+              "access_token": "ACCESS_TOKEN",
+              "refresh_token": "REFRESH_TOKEN"
+            }
+          },
+          "common_errors": [
+            401,
+            403
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/verify",
+          "summary": "Verify email with 6-digit code",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string",
+              "code": "6 digit string"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Email verified successfully",
+            "data": {
+              "page": "complete_profile"
+            }
+          },
+          "common_errors": [
+            400,
+            429
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/resend",
+          "summary": "Resend email verification code",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Verification code resent successfully",
+            "data": null
+          },
+          "notes": [
+            "Unknown/already-verified/suspended/deactivated accounts intentionally receive the same success response."
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/forgot-password",
+          "summary": "Request password reset code",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Password reset request processed successfully",
+            "data": null
+          },
+          "notes": [
+            "The service intentionally does not reveal whether an email exists."
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/forget-password",
+          "summary": "Backward-compatible alias of forgot-password",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Password reset request processed successfully",
+            "data": null
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/new-password",
+          "summary": "Set new password using reset code",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "email": "string",
+              "code": "6 digit string",
+              "password": "minimum 8 chars"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Password updated successfully",
+            "data": null
+          },
+          "common_errors": [
+            400,
+            429
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/complete-profile",
+          "summary": "Complete patient onboarding profile",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "phone_no": "string, optional",
+              "gender": "string, optional",
+              "birth_date": "ISO date, optional",
+              "address": {
+                "country": "string",
+                "state": "string",
+                "city": "string",
+                "zip": "string",
+                "house_no": "string"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Profile completed successfully",
+            "data": {
+              "user": "SANITIZED_USER",
+              "profile": "PATIENT_PROFILE_OBJECT"
+            }
+          },
+          "common_errors": [
+            401,
+            403
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/refresh-token",
+          "summary": "Rotate refresh token and issue new access/refresh tokens",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "refresh_token": "string, required"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Token refreshed successfully",
+            "data": {
+              "access_token": "NEW_ACCESS_TOKEN",
+              "refresh_token": "NEW_REFRESH_TOKEN"
+            }
+          },
+          "common_errors": [
+            401
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/logout",
+          "summary": "Revoke refresh token",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "refresh_token": "string, required"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Successfully logged out",
+            "data": null
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/google",
+          "summary": "Start Google OAuth",
+          "auth": "public",
+          "content_type": "text/html",
+          "request": {},
+          "response": {
+            "status": 302,
+            "msg": "Passport/Google redirect"
+          },
+          "notes": [
+            "Navigate the browser to this URL; normally do not call with fetch."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/google/callback",
+          "summary": "Google OAuth callback",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Successfully authenticated with Google",
+            "data": {
+              "user": "SANITIZED_USER",
+              "profile": "PATIENT_PROFILE_OR_NULL",
+              "access_token": "ACCESS_TOKEN",
+              "refresh_token": "REFRESH_TOKEN"
+            }
+          },
+          "common_errors": [
+            401
+          ],
+          "notes": [
+            "Current implementation returns JSON. It contains a development TODO to redirect to a frontend callback page later."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/google/failure",
+          "summary": "Google OAuth failure",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 401,
+            "msg": "Google authentication failed",
+            "data": null
+          }
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Current User & Patient Dashboard",
+      "base_path": "/api/user",
+      "description": "Current authenticated user, patient profile aggregation and profile image.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/user/me",
+          "summary": "Get current user/patient dashboard data",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Current user retrieved successfully",
+            "data": "PATIENT_PROFILE_OBJECT_OR_SANITIZED_USER"
+          },
+          "common_errors": [
+            401,
+            404
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me",
+          "summary": "Update current patient profile/preferences",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "fullname": "string, optional",
+              "phone_no": "string|null",
+              "birth_date": "ISO date|null",
+              "gender": "string|null",
+              "address": {
+                "country": "string",
+                "city": "string",
+                "state": "string",
+                "zip": "string",
+                "house_no": "string"
+              },
+              "preferred_service_categories": [
+                "pregnancy_care",
+                "newborn_care"
+              ],
+              "service_type": [
+                "SERVICE_OBJECT_ID"
+              ]
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Current user profile updated successfully",
+            "data": "PATIENT_PROFILE_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/user/me/avatar",
+          "summary": "Upload/replace patient profile image",
+          "auth": "bearer",
+          "content_type": "multipart/form-data",
+          "request": {
+            "body": {
+              "file_field": "profile_image",
+              "allowed": "JPEG/PNG/WebP",
+              "max_size": "5MB"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Profile image uploaded successfully",
+            "data": "PATIENT_PROFILE_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Pregnancy",
+      "base_path": "/api/user",
+      "description": "Current pregnancy and pregnancy history.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/user/me/pregnancy",
+          "summary": "Get current pregnancy",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Current pregnancy retrieved successfully",
+            "data": "PREGNANCY_OBJECT_OR_NULL"
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/pregnancies",
+          "summary": "Get pregnancy history",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Pregnancy history retrieved successfully",
+            "data": [
+              "PREGNANCY_OBJECT"
+            ]
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/user/me/pregnancy",
+          "summary": "Create current pregnancy",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "conception_method": "natural_conception|assisted_reproduction|null",
+              "last_menstral_date": "ISO date|null",
+              "has_fibroid": "boolean"
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Pregnancy created successfully",
+            "data": "PREGNANCY_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            409
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me/pregnancy",
+          "summary": "Update current pregnancy",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "conception_method": "natural_conception|assisted_reproduction|null",
+              "last_menstral_date": "ISO date|null",
+              "status": "active|completed|ended",
+              "has_fibroid": "boolean"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Pregnancy updated successfully",
+            "data": "PREGNANCY_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Health Condition Catalogue",
+      "base_path": "/api/health-conditions",
+      "description": "Public active pregnancy health-condition catalogue and assessment definitions.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/health-conditions",
+          "summary": "List active pregnancy health conditions",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Health conditions retrieved successfully",
+            "data": [
+              "HEALTH_CONDITION_OBJECT"
+            ]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/health-conditions/:slug",
+          "summary": "Get active condition by slug",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "slug": "gestational-diabetes"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Health condition retrieved successfully",
+            "data": "HEALTH_CONDITION_OBJECT"
+          },
+          "common_errors": [
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Pregnancy Health Assessments",
+      "base_path": "/api/user/me/pregnancy/health-assessments",
+      "description": "Condition-specific pregnancy assessments already implemented in the backend. Clinical scoring is intentionally not calculated.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/user/me/pregnancy/health-assessments",
+          "summary": "List active pregnancy assessments",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Pregnancy health assessments retrieved successfully",
+            "data": [
+              "HEALTH_ASSESSMENT_WITH_QUESTIONS"
+            ]
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/pregnancy/health-assessments/:conditionSlug",
+          "summary": "Get one assessment and its questions",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "conditionSlug": "gestational-diabetes"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Pregnancy health assessment retrieved successfully",
+            "data": "HEALTH_ASSESSMENT_WITH_QUESTIONS"
+          },
+          "common_errors": [
+            403,
+            404,
+            422
+          ]
+        },
+        {
+          "method": "PUT",
+          "path": "/api/user/me/pregnancy/health-assessments/:conditionSlug",
+          "summary": "Save assessment answers",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "conditionSlug": "gestational-diabetes"
+            },
+            "body": {
+              "answers": [
+                {
+                  "question_key": "string",
+                  "value": "boolean|string|number|array depending on question type"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Pregnancy health assessment saved successfully",
+            "data": "HEALTH_ASSESSMENT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404,
+            422
+          ],
+          "notes": [
+            "Required questions must be answered for status=completed. Partial answers result in status=in_progress. result_status remains pending and score remains null until a clinical scoring implementation is approved."
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Patient Pregnancy Health Conditions",
+      "base_path": "/api/user/me/pregnancy/health-conditions",
+      "description": "Patient self-reported health conditions attached to the current pregnancy.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/user/me/pregnancy/health-conditions",
+          "summary": "Record self-reported condition",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "condition_id": "CONDITION_ID",
+              "notes": "string|null"
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Health condition recorded successfully",
+            "data": "PREGNANCY_HEALTH_CONDITION_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404,
+            409
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me/pregnancy/health-conditions/:conditionId",
+          "summary": "Update self-reported condition",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "conditionId": "CONDITION_ID"
+            },
+            "body": {
+              "status": "reported only",
+              "notes": "string|null"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Health condition updated successfully",
+            "data": "PREGNANCY_HEALTH_CONDITION_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/user/me/pregnancy/health-conditions/:conditionId",
+          "summary": "Remove self-reported condition",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "conditionId": "CONDITION_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Health condition removed successfully",
+            "data": null
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "My Baby",
+      "base_path": "/api/user/me/babies",
+      "description": "Baby CRUD and photo management under the patient's current pregnancy.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/user/me/babies",
+          "summary": "Create baby",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "full_name": "string, required",
+              "date_of_birth": "ISO date, required, not future",
+              "gender": "male|female, required",
+              "weight": {
+                "value": "number >= 0",
+                "unit": "kg|lbs"
+              },
+              "length": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              },
+              "head_circumference": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              }
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Baby created successfully",
+            "data": "BABY_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/babies",
+          "summary": "List babies",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Babies retrieved successfully",
+            "data": [
+              "BABY_OBJECT"
+            ]
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/babies/:babyId",
+          "summary": "Get one baby",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby retrieved successfully",
+            "data": "BABY_OBJECT"
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me/babies/:babyId",
+          "summary": "Update baby",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "body": {
+              "full_name": "optional string",
+              "date_of_birth": "optional ISO date",
+              "gender": "optional male|female",
+              "weight": {
+                "value": "number >= 0",
+                "unit": "kg|lbs"
+              },
+              "length": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              },
+              "head_circumference": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby updated successfully",
+            "data": "BABY_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ],
+          "notes": [
+            "Measurement updates append patient_update growth history records and synchronize top-level latest measurements."
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/user/me/babies/:babyId",
+          "summary": "Delete baby",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby deleted successfully",
+            "data": {
+              "id": "BABY_ID"
+            }
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/user/me/babies/:babyId/photos",
+          "summary": "Add baby photo",
+          "auth": "bearer",
+          "content_type": "multipart/form-data",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "body": {
+              "file_field": "photo",
+              "allowed": "JPEG/PNG/WebP",
+              "max_size": "5MB",
+              "files": "1"
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Baby photo added successfully",
+            "data": {
+              "id": "PHOTO_ID",
+              "url": "https://...",
+              "public_id": "CLOUDINARY_PUBLIC_ID"
+            }
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me/babies/:babyId/photos/:photoId",
+          "summary": "Replace baby photo",
+          "auth": "bearer",
+          "content_type": "multipart/form-data",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID",
+              "photoId": "PHOTO_ID"
+            },
+            "body": {
+              "file_field": "photo",
+              "allowed": "JPEG/PNG/WebP",
+              "max_size": "5MB",
+              "files": "1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby photo updated successfully",
+            "data": {
+              "id": "PHOTO_ID",
+              "url": "https://...",
+              "public_id": "CLOUDINARY_PUBLIC_ID"
+            }
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/user/me/babies/:babyId/photos/:photoId",
+          "summary": "Delete baby photo",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID",
+              "photoId": "PHOTO_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby photo deleted successfully",
+            "data": {
+              "id": "PHOTO_ID"
+            }
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "My Vitals",
+      "base_path": "/api/user",
+      "description": "Patient blood pressure and blood sugar APIs.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/user/vitals",
+          "summary": "Record vital",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "blood_pressure": {
+                "systolic": "number >= 0",
+                "diastolic": "number >= 0"
+              },
+              "sugar_level": {
+                "value": "number >= 0",
+                "unit": "mg/dL|mmol/L"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Vital recorded successfully",
+            "data": "VITAL_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ],
+          "notes": [
+            "Both blood_pressure and sugar_level are required when recording a new vital. A current pregnancy is required."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/vitals",
+          "summary": "Get vital history",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "query_params": {
+              "date": "YYYY-MM-DD; mutually exclusive with from/to",
+              "from": "YYYY-MM-DD",
+              "to": "YYYY-MM-DD"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Vitals retrieved successfully",
+            "data": "VITAL_HISTORY"
+          },
+          "common_errors": [
+            400,
+            403
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/vitals/:vitalId",
+          "summary": "Partially update vital",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "vitalId": "VITAL_ID"
+            },
+            "body": {
+              "blood_pressure": {
+                "systolic": "optional number >= 0",
+                "diastolic": "optional number >= 0"
+              },
+              "sugar_level": {
+                "value": "optional number >= 0",
+                "unit": "optional mg/dL|mmol/L"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Vital updated successfully",
+            "data": "VITAL_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/user/vitals/:vitalId",
+          "summary": "Delete vital",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "vitalId": "VITAL_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Vital deleted successfully",
+            "data": {
+              "id": "VITAL_ID"
+            }
+          },
+          "common_errors": [
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/vitals/report",
+          "summary": "Get chart-ready vital report",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "query_params": {
+              "date": "YYYY-MM-DD; mutually exclusive with from/to",
+              "from": "YYYY-MM-DD",
+              "to": "YYYY-MM-DD"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Vital report retrieved successfully",
+            "data": "VITAL_REPORT"
+          },
+          "common_errors": [
+            400,
+            403
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/vitals/summary",
+          "summary": "Get latest vital summary for dashboard",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Vitals summary retrieved successfully",
+            "data": "VITAL_SUMMARY"
+          },
+          "common_errors": [
+            403
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4H6-vital-history-report.zip",
+        "route_file": "routes/vitals.routes.js",
+        "server_mount": "app.use(\"/api/user\", vitalsRoutes)",
+        "verified": true
+      }
+    },
+    {
+      "name": "My Baby Progress",
+      "base_path": "/api/user/babies/:babyId",
+      "description": "Historical growth, age, mathematical change and chart-ready report.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/user/babies/:babyId/growth",
+          "summary": "Add growth record",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "body": {
+              "recorded_at": "optional ISO datetime, not future",
+              "weight": {
+                "value": "number >= 0",
+                "unit": "kg|lbs"
+              },
+              "length": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              },
+              "head_circumference": {
+                "value": "number >= 0",
+                "unit": "cm|m"
+              }
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Baby growth recorded successfully",
+            "data": "GROWTH_RECORD"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ],
+          "notes": [
+            "At least one measurement is required. source is always patient_update for this endpoint."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/babies/:babyId/growth",
+          "summary": "Get growth history",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "query_params": {
+              "date": "YYYY-MM-DD; mutually exclusive with from/to",
+              "from": "YYYY-MM-DD; must be paired with to",
+              "to": "YYYY-MM-DD; inclusive"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby growth history retrieved successfully",
+            "data": "BABY_GROWTH_HISTORY"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ],
+          "notes": [
+            "Newest first. to is inclusive. Legacy babies without growth_history may receive an in-memory registration baseline when top-level measurements still exist."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/babies/:babyId/progress",
+          "summary": "Get baby progress",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "query_params": {
+              "date": "YYYY-MM-DD; mutually exclusive with from/to",
+              "from": "YYYY-MM-DD; must be paired with to",
+              "to": "YYYY-MM-DD; inclusive"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby progress retrieved successfully",
+            "data": "BABY_PROGRESS_OBJECT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ],
+          "notes": [
+            "Age is calendar-aware. Mathematical change is calculated against the previous filtered growth record. Values are rounded to 2 decimal places in the current implementation."
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/babies/:babyId/progress/report",
+          "summary": "Get baby progress report",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "babyId": "BABY_ID"
+            },
+            "query_params": {
+              "date": "YYYY-MM-DD; mutually exclusive with from/to",
+              "from": "YYYY-MM-DD; must be paired with to",
+              "to": "YYYY-MM-DD; inclusive"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Baby progress report retrieved successfully",
+            "data": "BABY_PROGRESS_REPORT"
+          },
+          "common_errors": [
+            400,
+            403,
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "route_file": "routes/baby-progress.routes.js",
+        "server_mount": "app.use(\"/api/user/babies\", babyProgressRoutes)",
+        "verified": true
+      }
+    },
+    {
+      "name": "Service Catalogue",
+      "base_path": "/api/services",
+      "description": "Public active service catalogue.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/services",
+          "summary": "List active services",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "query_params": {
+              "category": "optional pregnancy_care|newborn_care"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Services retrieved successfully",
+            "data": [
+              "SERVICE_OBJECT"
+            ]
+          }
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "System Configuration",
+      "base_path": "/api/system",
+      "description": "Public platform subscription and preferred-choice configuration.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/system/subscriptions",
+          "summary": "Get platform subscription configuration",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Platform subscription configuration retrieved successfully",
+            "data": {
+              "enabled": "boolean",
+              "billing_cycle": "monthly",
+              "amount": "number|null",
+              "currency": "NGN"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/system/preferred-choice",
+          "summary": "Get active preferred choices",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Preferred choices retrieved successfully",
+            "data": [
+              {
+                "id": "pregnancy_care",
+                "code": "pregnancy_care",
+                "label": "Pregnancy Care",
+                "active": true,
+                "sort_order": 1
+              }
+            ]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/system/preferred-choice/:id",
+          "summary": "Get one preferred choice",
+          "auth": "public",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "id": "pregnancy_care"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Preferred choice retrieved successfully",
+            "data": {
+              "id": "pregnancy_care",
+              "code": "pregnancy_care",
+              "label": "Pregnancy Care",
+              "active": true,
+              "sort_order": 1
+            }
+          },
+          "common_errors": [
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    },
+    {
+      "name": "Admin Health Conditions",
+      "base_path": "/api/admin/health-conditions",
+      "description": "Admin-only catalogue management. Patient frontend should not call these endpoints.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/admin/health-conditions",
+          "summary": "List all pregnancy health conditions including inactive",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {},
+          "roles": [
+            "admin",
+            "super_admin"
+          ],
+          "response": {
+            "status": 200,
+            "msg": "Health conditions retrieved successfully",
+            "data": [
+              "HEALTH_CONDITION_OBJECT"
+            ]
+          },
+          "common_errors": [
+            401,
+            403
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/admin/health-conditions",
+          "summary": "Create pregnancy health condition",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "name": "string",
+              "slug": "lowercase-hyphenated string",
+              "description": "string|null",
+              "category": "pregnancy_health",
+              "active": "boolean",
+              "sort_order": "non-negative integer",
+              "recommendation_keys": [
+                "string"
+              ],
+              "assessment": {
+                "enabled": "boolean",
+                "title": "string|null",
+                "description": "string|null",
+                "questions": [
+                  {
+                    "key": "string",
+                    "prompt": "string",
+                    "type": "boolean|single_select|multi_select|number|text",
+                    "required": "boolean",
+                    "options": [
+                      {
+                        "value": "string",
+                        "label": "string"
+                      }
+                    ],
+                    "sort_order": "integer",
+                    "active": "boolean"
+                  }
+                ]
+              }
+            }
+          },
+          "roles": [
+            "admin",
+            "super_admin"
+          ],
+          "response": {
+            "status": 201,
+            "msg": "Health condition created successfully",
+            "data": "HEALTH_CONDITION_OBJECT"
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            409
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/admin/health-conditions/:id",
+          "summary": "Update pregnancy health condition",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "path_params": {
+              "id": "CONDITION_ID"
+            },
+            "body": {
+              "name": "optional string",
+              "slug": "optional lowercase-hyphenated string",
+              "description": "optional string|null",
+              "active": "optional boolean",
+              "sort_order": "optional integer",
+              "recommendation_keys": [
+                "optional strings"
+              ],
+              "assessment": "optional assessment object"
+            }
+          },
+          "roles": [
+            "admin",
+            "super_admin"
+          ],
+          "response": {
+            "status": 200,
+            "msg": "Health condition updated successfully",
+            "data": "HEALTH_CONDITION_OBJECT"
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404,
+            409
+          ]
+        }
+      ],
+      "source_verification": {
+        "archive": "getTreat-4I-complete-with-migration.zip",
+        "verified": true
+      }
+    }
+  ],
+  "schemas": {
+    "SANITIZED_USER": {
+      "id": "USER_ID",
+      "fullname": "Jane Doe",
+      "email": "jane@example.com",
+      "role": "patient",
+      "emailVerified": true,
+      "accountStatus": "active",
+      "page": "dashboard",
+      "lastLoginAt": "ISO_DATETIME",
+      "created_at": "ISO_DATETIME",
+      "modified_at": "ISO_DATETIME"
+    },
+    "PREGNANCY_OBJECT": {
+      "id": "PREGNANCY_ID",
+      "status": "active",
+      "is_current": true,
+      "conception_method": "natural_conception",
+      "last_menstral_date": "ISO_DATETIME",
+      "expected_delivery_date": "ISO_DATETIME|null",
+      "current_trimester": "number",
+      "weeks_gone": "number",
+      "weeks_left": "number",
+      "has_fibroid": false,
+      "health_conditions": [],
+      "health_assessments": [],
+      "created_at": "ISO_DATETIME",
+      "modified_at": "ISO_DATETIME"
+    },
+    "PATIENT_PROFILE_OBJECT": {
+      "id": "PROFILE_ID",
+      "user_id": "USER_ID",
+      "fullname": "Jane Doe",
+      "email": "jane@example.com",
+      "phone_no": "08012345678|null",
+      "birth_date": "ISO_DATETIME|null",
+      "gender": "female|null",
+      "address": {
+        "country": "Nigeria|null",
+        "city": "Abuja|null",
+        "state": "FCT|null",
+        "zip": "900001|null",
+        "house_no": "12 Example Street|null"
+      },
+      "preferred_service_categories": [
+        "pregnancy_care"
+      ],
+      "service_type": [
+        "service name strings"
+      ],
+      "pregnancy": "PREGNANCY_OBJECT|null",
+      "pregnancy_history": [
+        "PREGNANCY_OBJECT"
+      ],
+      "role": "patient",
+      "emailVerified": true,
+      "accountStatus": "active",
+      "page": "dashboard",
+      "profileCompleted": true,
+      "profileImage": "URL|null",
+      "avatar": "URL|null",
+      "lastLoginAt": "ISO_DATETIME|null",
+      "created_at": "ISO_DATETIME",
+      "modified_at": "ISO_DATETIME"
+    },
+    "HEALTH_CONDITION_OBJECT": {
+      "id": "CONDITION_ID",
+      "name": "Gestational Diabetes",
+      "slug": "gestational-diabetes",
+      "description": "string|null",
+      "category": "pregnancy_health",
+      "active": true,
+      "sort_order": 1,
+      "recommendation_keys": [],
+      "assessment": {
+        "enabled": true,
+        "title": "string|null",
+        "description": "string|null",
+        "questions": [
+          {
+            "key": "previous_gdm",
+            "prompt": "string",
+            "type": "boolean",
+            "required": true,
+            "options": [],
+            "sort_order": 1
+          }
+        ]
+      }
+    },
+    "HEALTH_ASSESSMENT": {
+      "id": "ASSESSMENT_ID|null",
+      "condition": {
+        "id": "CONDITION_ID",
+        "name": "Gestational Diabetes",
+        "slug": "gestational-diabetes"
+      },
+      "condition_name": "Gestational Diabetes",
+      "condition_slug": "gestational-diabetes",
+      "status": "not_started|in_progress|completed",
+      "result_status": "pending|at_risk|low_risk|normal|needs_review",
+      "score": "number|null",
+      "answers": [
+        {
+          "question_key": "string",
+          "value": "question-type-dependent"
+        }
+      ],
+      "started_at": "ISO_DATETIME|null",
+      "completed_at": "ISO_DATETIME|null"
+    },
+    "HEALTH_ASSESSMENT_WITH_QUESTIONS": {
+      "id": "ASSESSMENT_ID|null",
+      "condition": {
+        "id": "CONDITION_ID",
+        "name": "Gestational Diabetes",
+        "slug": "gestational-diabetes"
+      },
+      "condition_name": "Gestational Diabetes",
+      "condition_slug": "gestational-diabetes",
+      "status": "not_started|in_progress|completed",
+      "result_status": "pending|at_risk|low_risk|normal|needs_review",
+      "score": "number|null",
+      "answers": [],
+      "questions": [
+        {
+          "key": "string",
+          "prompt": "string",
+          "type": "boolean|single_select|multi_select|number|text",
+          "required": "boolean",
+          "options": [],
+          "sort_order": "number"
+        }
+      ],
+      "started_at": "ISO_DATETIME|null",
+      "completed_at": "ISO_DATETIME|null"
+    },
+    "PREGNANCY_HEALTH_CONDITION_OBJECT": {
+      "id": "PREGNANCY_CONDITION_ID",
+      "condition": {
+        "id": "CONDITION_ID",
+        "name": "Gestational Diabetes",
+        "slug": "gestational-diabetes"
+      },
+      "status": "reported",
+      "source": "patient",
+      "identified_at": "ISO_DATETIME",
+      "notes": "string|null"
+    },
+    "BABY_OBJECT": {
+      "id": "BABY_ID",
+      "full_name": "Baby Zara",
+      "date_of_birth": "ISO_DATETIME",
+      "gender": "female",
+      "weight": {
+        "value": 7.9,
+        "unit": "kg"
+      },
+      "length": {
+        "value": 100,
+        "unit": "cm"
+      },
+      "head_circumference": {
+        "value": 43,
+        "unit": "cm"
+      },
+      "growth_history": [
+        "GROWTH_RECORD"
+      ],
+      "photos": [
+        {
+          "id": "PHOTO_ID",
+          "url": "URL",
+          "public_id": "CLOUDINARY_PUBLIC_ID"
+        }
+      ],
+      "created_at": "ISO_DATETIME",
+      "modified_at": "ISO_DATETIME"
+    },
+    "GROWTH_RECORD": {
+      "id": "GROWTH_ID",
+      "recorded_at": "ISO_DATETIME",
+      "weight": {
+        "value": 7.9,
+        "unit": "kg"
+      },
+      "length": {
+        "value": 100,
+        "unit": "cm"
+      },
+      "head_circumference": {
+        "value": 43,
+        "unit": "cm"
+      },
+      "source": "registration|patient_update",
+      "created_at": null,
+      "modified_at": null
+    },
+    "BABY_GROWTH_HISTORY": {
+      "baby_id": "BABY_ID",
+      "filters": {
+        "date": "YYYY-MM-DD|null",
+        "from": "YYYY-MM-DD|null",
+        "to": "YYYY-MM-DD|null"
+      },
+      "latest": "GROWTH_RECORD|null",
+      "history": [
+        "GROWTH_RECORD"
+      ],
+      "total_records": "number",
+      "total_records_all": "number"
+    },
+    "BABY_PROGRESS_OBJECT": {
+      "baby": {
+        "id": "BABY_ID",
+        "full_name": "Baby Zara",
+        "date_of_birth": "ISO_DATETIME",
+        "gender": "female",
+        "photos": []
+      },
+      "age": {
+        "years": 0,
+        "months": 8,
+        "days": 12,
+        "total_days": 255,
+        "total_weeks": 36,
+        "formatted": "8 months and 12 days"
+      },
+      "latest_growth": "GROWTH_RECORD|null",
+      "previous_growth": "GROWTH_RECORD|null",
+      "change": {
+        "weight": {
+          "absolute": 2.3,
+          "percentage": 41.07
+        },
+        "length": {
+          "absolute": 40,
+          "percentage": 66.67
+        },
+        "head_circumference": {
+          "absolute": 3,
+          "percentage": 7.5
+        }
+      },
+      "percentiles": {
+        "weight_for_age": {
+          "value": null,
+          "status": "reference_standard_required",
+          "field": "weight_for_age"
+        },
+        "length_for_age": {
+          "value": null,
+          "status": "reference_standard_required",
+          "field": "length_for_age"
+        },
+        "head_circumference_for_age": {
+          "value": null,
+          "status": "reference_standard_required",
+          "field": "head_circumference_for_age"
+        },
+        "weight_for_length": {
+          "value": null,
+          "status": "reference_standard_required",
+          "field": "weight_for_length"
+        }
+      },
+      "developmental_milestones": {
+        "status": "reference_data_required",
+        "items": []
+      },
+      "total_growth_records": "number",
+      "total_growth_records_all": "number",
+      "filters": {
+        "date": "YYYY-MM-DD|null",
+        "from": "YYYY-MM-DD|null",
+        "to": "YYYY-MM-DD|null"
+      }
+    },
+    "BABY_PROGRESS_REPORT": {
+      "baby": "BABY_SUMMARY",
+      "age": "AGE_OBJECT",
+      "summary": {
+        "latest_growth": "GROWTH_RECORD|null",
+        "previous_growth": "GROWTH_RECORD|null",
+        "change": "CHANGE_OBJECT",
+        "percentiles": "PERCENTILE_OBJECT",
+        "developmental_milestones": {
+          "status": "reference_data_required",
+          "items": []
+        }
+      },
+      "filters": {
+        "date": "YYYY-MM-DD|null",
+        "from": "YYYY-MM-DD|null",
+        "to": "YYYY-MM-DD|null"
+      },
+      "records": [
+        "GROWTH_RECORD"
+      ],
+      "chart": {
+        "weight": [
+          {
+            "recorded_at": "ISO_DATETIME",
+            "value": "number",
+            "unit": "kg|lbs"
+          }
+        ],
+        "length": [
+          {
+            "recorded_at": "ISO_DATETIME",
+            "value": "number",
+            "unit": "cm|m"
+          }
+        ],
+        "head_circumference": [
+          {
+            "recorded_at": "ISO_DATETIME",
+            "value": "number",
+            "unit": "cm|m"
+          }
+        ]
+      },
+      "total_records": "number",
+      "total_records_all": "number"
+    },
+    "VITAL_OBJECT": {
+      "id": "VITAL_ID",
+      "pregnancy_id": "PREGNANCY_ID",
+      "blood_pressure": {
+        "systolic": 120,
+        "diastolic": 80,
+        "unit": "mmHg"
+      },
+      "sugar_level": {
+        "value": 95,
+        "unit": "mg/dL"
+      },
+      "recorded_at": "ISO_DATETIME",
+      "created_at": "ISO_DATETIME",
+      "modified_at": "ISO_DATETIME"
+    },
+    "VITAL_HISTORY": {
+      "filters": {
+        "date": "YYYY-MM-DD|null",
+        "from": "YYYY-MM-DD|null",
+        "to": "YYYY-MM-DD|null"
+      },
+      "latest": "VITAL_OBJECT|null",
+      "history": [
+        "VITAL_OBJECT"
+      ],
+      "total_records": "number",
+      "total_records_all": "number"
+    },
+    "VITAL_REPORT": {
+      "filters": {
+        "date": "YYYY-MM-DD|null",
+        "from": "YYYY-MM-DD|null",
+        "to": "YYYY-MM-DD|null"
+      },
+      "total_records": "number",
+      "records": [
+        "VITAL_OBJECT"
+      ],
+      "chart": {
+        "blood_pressure": [
+          {
+            "recorded_at": "ISO_DATETIME",
+            "systolic": "number",
+            "diastolic": "number",
+            "unit": "mmHg"
+          }
+        ],
+        "sugar_level": [
+          {
+            "recorded_at": "ISO_DATETIME",
+            "value": "number",
+            "unit": "mg/dL|mmol/L"
+          }
+        ]
+      }
+    },
+    "VITAL_SUMMARY": {
+      "latest_blood_pressure": {
+        "systolic": 120,
+        "diastolic": 80,
+        "unit": "mmHg"
+      },
+      "latest_sugar_level": {
+        "value": 95,
+        "unit": "mg/dL"
+      },
+      "last_recorded_at": "ISO_DATETIME|null",
+      "total_records": "number"
+    },
+    "SERVICE_OBJECT": {
+      "id": "SERVICE_ID",
+      "name": "string",
+      "slug": "string",
+      "description": "string|null",
+      "category": "pregnancy_care|newborn_care",
+      "access_type": "included|optional",
+      "active": true,
+      "sort_order": "number",
+      "plans": [
+        {
+          "code": "string",
+          "label": "string",
+          "billing_cycle": "one_off|weekly|monthly|quarterly|yearly",
+          "amount": "number|null",
+          "currency": "NGN",
+          "discount_percent": "number",
+          "active": true
+        }
+      ]
+    }
+  },
+  "status_codes": {
+    "200": "Successful read/update/delete",
+    "201": "Successful resource creation",
+    "400": "Validation or malformed request",
+    "401": "Authentication/token problem",
+    "403": "Authenticated but not permitted/account state blocks access",
+    "404": "Resource/account/pregnancy/baby not found",
+    "409": "Conflict/duplicate/active-pregnancy conflict",
+    "422": "Business rule prevents an otherwise valid request",
+    "429": "Too many verification/reset-code attempts",
+    "500": "Unexpected server error"
+  }
+}

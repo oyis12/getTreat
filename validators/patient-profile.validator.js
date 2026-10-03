@@ -237,4 +237,257 @@ export const validatePatientProfileUpdate = (
   }
 };
 
-export default validatePatientProfileUpdate;
+
+const validateVitalMeasurement = (measurement, fieldName) => {
+  if (
+    measurement === null ||
+    typeof measurement !== "object" ||
+    Array.isArray(measurement)
+  ) {
+    throw new AppError(
+      `${fieldName} must be an object`,
+      400
+    );
+  }
+
+  if (fieldName === "blood_pressure") {
+    const allowedFields = ["systolic", "diastolic"];
+
+    const unknownFields = Object.keys(measurement).filter(
+      (field) => !allowedFields.includes(field)
+    );
+
+    if (unknownFields.length > 0) {
+      throw new AppError(
+        `Unknown ${fieldName} field(s): ${unknownFields.join(", ")}`,
+        400
+      );
+    }
+
+    if (
+      measurement.systolic === undefined ||
+      measurement.systolic === null
+    ) {
+      throw new AppError(
+        "Blood pressure systolic is required",
+        400
+      );
+    }
+
+    if (
+      measurement.diastolic === undefined ||
+      measurement.diastolic === null
+    ) {
+      throw new AppError(
+        "Blood pressure diastolic is required",
+        400
+      );
+    }
+
+    if (
+      typeof measurement.systolic !== "number" ||
+      !Number.isFinite(measurement.systolic)
+    ) {
+      throw new AppError(
+        "Blood pressure systolic must be a valid number",
+        400
+      );
+    }
+
+    if (
+      typeof measurement.diastolic !== "number" ||
+      !Number.isFinite(measurement.diastolic)
+    ) {
+      throw new AppError(
+        "Blood pressure diastolic must be a valid number",
+        400
+      );
+    }
+
+    if (measurement.systolic < 0) {
+      throw new AppError(
+        "Blood pressure systolic cannot be negative",
+        400
+      );
+    }
+
+    if (measurement.diastolic < 0) {
+      throw new AppError(
+        "Blood pressure diastolic cannot be negative",
+        400
+      );
+    }
+
+    return;
+  }
+
+  if (fieldName === "sugar_level") {
+    const allowedFields = ["value", "unit"];
+
+    const unknownFields = Object.keys(measurement).filter(
+      (field) => !allowedFields.includes(field)
+    );
+
+    if (unknownFields.length > 0) {
+      throw new AppError(
+        `Unknown ${fieldName} field(s): ${unknownFields.join(", ")}`,
+        400
+      );
+    }
+
+    if (
+      measurement.value === undefined ||
+      measurement.value === null
+    ) {
+      throw new AppError(
+        "Sugar level value is required",
+        400
+      );
+    }
+
+    if (
+      typeof measurement.value !== "number" ||
+      !Number.isFinite(measurement.value)
+    ) {
+      throw new AppError(
+        "Sugar level value must be a valid number",
+        400
+      );
+    }
+
+    if (measurement.value < 0) {
+      throw new AppError(
+        "Sugar level value cannot be negative",
+        400
+      );
+    }
+
+    if (
+      typeof measurement.unit !== "string" ||
+      !measurement.unit.trim()
+    ) {
+      throw new AppError(
+        "Sugar level unit is required",
+        400
+      );
+    }
+
+    const unit = measurement.unit.trim().toLowerCase();
+
+    if (!["mg/dl", "mmol/l"].includes(unit)) {
+      throw new AppError(
+        "Sugar level unit must be either mg/dL or mmol/L",
+        400
+      );
+    }
+
+    return;
+  }
+
+  throw new AppError(
+    `Unsupported vital measurement: ${fieldName}`,
+    400
+  );
+};
+
+export const validateRecordVital = (req, _res, next) => {
+  try {
+    const { blood_pressure, sugar_level } = req.body;
+
+    const allowedFields = [
+      "blood_pressure",
+      "sugar_level",
+    ];
+
+    const unknownFields = Object.keys(req.body).filter(
+      (field) => !allowedFields.includes(field)
+    );
+
+    if (unknownFields.length > 0) {
+      throw new AppError(
+        `Unknown vital field(s): ${unknownFields.join(", ")}`,
+        400
+      );
+    }
+
+    if (!blood_pressure) {
+      throw new AppError(
+        "Blood pressure is required",
+        400
+      );
+    }
+
+    if (!sugar_level) {
+      throw new AppError(
+        "Sugar level is required",
+        400
+      );
+    }
+
+    validateVitalMeasurement(
+      blood_pressure,
+      "blood_pressure"
+    );
+
+    validateVitalMeasurement(
+      sugar_level,
+      "sugar_level"
+    );
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const validateUpdateVital = (req, _res, next) => {
+  try {
+    const { blood_pressure, sugar_level } = req.body;
+
+    const allowedFields = [
+      "blood_pressure",
+      "sugar_level",
+    ];
+
+    const unknownFields = Object.keys(req.body).filter(
+      (field) => !allowedFields.includes(field)
+    );
+
+    if (unknownFields.length > 0) {
+      throw new AppError(
+        `Unknown vital field(s): ${unknownFields.join(", ")}`,
+        400
+      );
+    }
+
+    if (
+      blood_pressure === undefined &&
+      sugar_level === undefined
+    ) {
+      throw new AppError(
+        "At least one vital measurement is required",
+        400
+      );
+    }
+
+    if (blood_pressure !== undefined) {
+      validateVitalMeasurement(
+        blood_pressure,
+        "blood_pressure"
+      );
+    }
+
+    if (sugar_level !== undefined) {
+      validateVitalMeasurement(
+        sugar_level,
+        "sugar_level"
+      );
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// export default validatePatientProfileUpdate;

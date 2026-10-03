@@ -7,10 +7,11 @@ import {
 } from "../controllers/user.controller.js";
 
 import babyRoutes from "./baby.routes.js";
+import vitalRoutes from "./vitals.routes.js"
 
 import { protect } from "../middlewares/auth.middleware.js";
 import uploadPatientProfileImageMiddleware from "../middlewares/upload.middleware.js";
-import validatePatientProfileUpdate from "../validators/patient-profile.validator.js";
+import {validatePatientProfileUpdate} from "../validators/patient-profile.validator.js";
 
 const router = express.Router();
 
@@ -33,5 +34,6 @@ router.post(
 
 // Baby routes
 router.use("/me/babies", babyRoutes);
+router.use(vitalRoutes)
 
 export default router;
