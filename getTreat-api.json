@@ -1,13 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-    "version": "2026-10-02",
+    "version": "2026-10-03",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Clean frontend integration reference for the currently registered GetTreat backend APIs.",
-    "source_snapshots": [
-      "getTreat-4I-complete-with-migration.zip",
-      "getTreat-4H6-vital-history-report.zip"
-    ],
+    "purpose": "Complete frontend integration reference for the current GetTreat backend, including Authentication, Patient Dashboard, Pregnancy, Health Conditions, Health Assessments, Pregnancy Health Conditions, My Baby, My Vitals, My Baby Progress, Services, System Configuration, and Admin Health Conditions.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -61,6 +57,43 @@
       "/api/user (vitals)": "vitals.routes.js",
       "/api/user/babies": "baby-progress.routes.js",
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
+    },
+    "source_verification": {
+      "verified_from_uploaded_zip": true,
+      "archive_sha256": "2d9a46e5cbe982c20125b19a4e8efe3ef9ffb8f489aaef470d941126ce4aeb26",
+      "archive_size_bytes": 95338208,
+      "verified_at_utc": "2026-10-02T16:35:27.568732+00:00",
+      "api_reference_source_inside_archive": "getTreat/getTreat-api.json",
+      "server_source_inside_archive": "getTreat/server.js"
+    },
+    "route_mounts_verified_from_server_js": {
+      "/api/auth": "auth.routes.js",
+      "/api/user": "user.routes.js",
+      "/api/services": "service.routes.js",
+      "/api/health-conditions": "health-condition.routes.js",
+      "/api/admin/health-conditions": "admin-health-condition.routes.js",
+      "/api/system": "system.routes.js",
+      "/api/user (pregnancy)": "pregnancy.routes.js",
+      "/api/user (health assessments)": "health-assessment.routes.js",
+      "/api/user (pregnancy health conditions)": "pregnancy-health-condition.routes.js",
+      "/api/user (vitals)": "vitals.routes.js",
+      "/api/user/babies": "baby-progress.routes.js",
+      "/api/user/me/babies": "baby.routes.js via user.routes.js"
+    },
+    "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. The Vitals router is part of the current working patient API after the validator fix.",
+    "important_latest_codebase_note": "This is the complete frontend API reference. Vitals endpoints are included as active patient APIs because the current working implementation has the Vitals router available and the validateRecordVital/validateUpdateVital validator exports have been restored.",
+    "frontend_integration": {
+      "authorization_header": "Authorization: Bearer <access_token>",
+      "json_header": "Content-Type: application/json",
+      "multipart_header": "Use multipart/form-data for documented image-upload endpoints; let the client set the boundary.",
+      "ownership_rule": "Never accept patientId/userId from the client as the source of ownership for patient resources.",
+      "date_filter_rule": "For supported history/report endpoints, use either date OR from+to, not both.",
+      "clinical_safety_rule": "The API stores and presents health measurements/assessment data without inventing clinical interpretation where the product specification does not define one.",
+      "response_serialization": {
+        "_id": "id",
+        "createdAt": "created_at",
+        "updatedAt": "modified_at"
+      }
     }
   },
   "endpoint_groups": [
@@ -373,7 +406,8 @@
       "source_verification": {
         "archive": "getTreat-4I-complete-with-migration.zip",
         "verified": true
-      }
+      },
+      "availability": "mounted"
     },
     {
       "name": "Current User & Patient Dashboard",
@@ -463,7 +497,8 @@
       "source_verification": {
         "archive": "getTreat-4I-complete-with-migration.zip",
         "verified": true
-      }
+      },
+      "availability": "mounted"
     },
     {
       "name": "Pregnancy",
@@ -556,10 +591,7 @@
           ]
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "Health Condition Catalogue",
@@ -602,10 +634,7 @@
           ]
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "Pregnancy Health Assessments",
@@ -691,7 +720,8 @@
       "source_verification": {
         "archive": "getTreat-4I-complete-with-migration.zip",
         "verified": true
-      }
+      },
+      "availability": "mounted"
     },
     {
       "name": "Patient Pregnancy Health Conditions",
@@ -770,10 +800,7 @@
           ]
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "My Baby",
@@ -1011,10 +1038,7 @@
           ]
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "My Vitals",
@@ -1040,7 +1064,7 @@
             }
           },
           "response": {
-            "status": 200,
+            "status": 201,
             "msg": "Vital recorded successfully",
             "data": "VITAL_OBJECT"
           },
@@ -1050,7 +1074,10 @@
             404
           ],
           "notes": [
-            "Both blood_pressure and sugar_level are required when recording a new vital. A current pregnancy is required."
+            "Both blood_pressure and sugar_level are required when recording a new vital.",
+            "A current pregnancy is required by the current service implementation.",
+            "recorded_at and pregnancy_id are assigned server-side.",
+            "No clinical interpretation or threshold classification is performed."
           ]
         },
         {
@@ -1074,6 +1101,11 @@
           "common_errors": [
             400,
             403
+          ],
+          "notes": [
+            "Returns newest-first history.",
+            "date is mutually exclusive with from/to.",
+            "Empty filtered history is a successful empty state."
           ]
         },
         {
@@ -1106,6 +1138,10 @@
             400,
             403,
             404
+          ],
+          "notes": [
+            "Client cannot change ownership, pregnancy_id, recorded_at, or the vital id.",
+            "The request may update blood_pressure and/or sugar_level."
           ]
         },
         {
@@ -1172,11 +1208,17 @@
         }
       ],
       "source_verification": {
-        "archive": "getTreat-4H6-vital-history-report.zip",
         "route_file": "routes/vitals.routes.js",
-        "server_mount": "app.use(\"/api/user\", vitalsRoutes)",
-        "verified": true
-      }
+        "validator_file": "validators/patient-profile.validator.js",
+        "validators": [
+          "validateRecordVital",
+          "validateUpdateVital"
+        ],
+        "verified": true,
+        "note": "Validator exports were restored and the Vitals API is working."
+      },
+      "availability": "active",
+      "frontend_note": "Protected patient endpoints. Ownership is derived from the authenticated user; do not send patientId/userId/pregnancyId to claim ownership."
     },
     {
       "name": "My Baby Progress",
@@ -1311,12 +1353,7 @@
           ]
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "route_file": "routes/baby-progress.routes.js",
-        "server_mount": "app.use(\"/api/user/babies\", babyProgressRoutes)",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "Service Catalogue",
@@ -1343,10 +1380,7 @@
           }
         }
       ],
-      "source_verification": {
-        "archive": "getTreat-4I-complete-with-migration.zip",
-        "verified": true
-      }
+      "availability": "mounted"
     },
     {
       "name": "System Configuration",
@@ -1422,7 +1456,8 @@
       "source_verification": {
         "archive": "getTreat-4I-complete-with-migration.zip",
         "verified": true
-      }
+      },
+      "availability": "mounted"
     },
     {
       "name": "Admin Health Conditions",
@@ -1551,7 +1586,8 @@
       "source_verification": {
         "archive": "getTreat-4I-complete-with-migration.zip",
         "verified": true
-      }
+      },
+      "availability": "mounted"
     }
   ],
   "schemas": {
