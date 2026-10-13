@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test": "node --test",
     "migrate:patient-profiles": "node scripts/migrate-patient-profiles.js",
     "seed:system": "node scripts/seed-system.js",
     "seed:services": "node scripts/seed-services.js",

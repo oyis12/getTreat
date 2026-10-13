@@ -44,7 +44,7 @@ const serializeAssessment = (assessment) => ({
   completed_at: assessment.completed_at,
 });
 
-const validateAnswers = (condition, answers) => {
+export const validateAnswers = (condition, answers) => {
   if (!Array.isArray(answers)) throw new AppError("answers must be an array", 400);
 
   const activeQuestions = (condition.assessment?.questions ?? []).filter((question) => question.active);
@@ -54,6 +54,12 @@ const validateAnswers = (condition, answers) => {
   for (const answer of answers) {
     if (!answer || typeof answer !== "object" || typeof answer.question_key !== "string") {
       throw new AppError("Each answer must contain a valid question_key", 400);
+    }
+    const unknownFields = Object.keys(answer).filter(
+      (field) => !["question_key", "value"].includes(field)
+    );
+    if (unknownFields.length) {
+      throw new AppError(`Unknown answer field(s): ${unknownFields.join(", ")}`, 400);
     }
     if (seen.has(answer.question_key)) {
       throw new AppError(`Duplicate answer for question: ${answer.question_key}`, 400);
@@ -94,6 +100,11 @@ const validateAnswers = (condition, answers) => {
   return {
     isComplete: missingRequired.length === 0,
   };
+};
+
+export const clearUnscoredAssessmentResult = (assessment) => {
+  assessment.result_status = "pending";
+  assessment.score = null;
 };
 
 export const getPregnancyHealthAssessments = async (userId) => {
@@ -206,8 +217,7 @@ export const savePregnancyHealthAssessment = async (userId, conditionSlug, answe
 
   const now = new Date();
   assessment.status = isComplete ? "completed" : "in_progress";
-  assessment.result_status = "pending";
-  assessment.score = null;
+  clearUnscoredAssessmentResult(assessment);
   assessment.answers = answers.map((answer) => ({
     question_key: answer.question_key,
     value: answer.value,

@@ -27,7 +27,7 @@
     "frontend_safety": [
       "Do not mass-assign role, accountStatus, emailVerified, page, permissions, ownership IDs, password hashes or Google IDs.",
       "Use multipart/form-data for profile and baby photo uploads with the exact documented field names.",
-      "Health assessment score/result_status are server-controlled. Current implementation does not calculate a clinical score.",
+      "Health assessment score/result_status are server-controlled. Health Check and condition-summary percentages/status labels are deferred; result_status remains pending and score remains null until approved clinical scoring rules exist.",
       "Baby Progress percentiles and developmental milestones are placeholders pending approved clinical reference data.",
       "Vitals are stored/returned without clinical interpretation."
     ],
@@ -713,6 +713,7 @@
             422
           ],
           "notes": [
+            "Each answer may contain only question_key and value; unknown nested fields are rejected.",
             "Required questions must be answered for status=completed. Partial answers result in status=in_progress. result_status remains pending and score remains null until a clinical scoring implementation is approved."
           ]
         }

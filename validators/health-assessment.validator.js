@@ -3,6 +3,8 @@ import AppError from "../utils/AppError.js";
 const isValidAnswer = (answer) =>
   answer &&
   typeof answer === "object" &&
+  !Array.isArray(answer) &&
+  Object.keys(answer).every((field) => ["question_key", "value"].includes(field)) &&
   typeof answer.question_key === "string" &&
   answer.question_key.trim().length > 0 &&
   Object.prototype.hasOwnProperty.call(answer, "value");
