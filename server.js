@@ -19,6 +19,10 @@ import adminHealthConditionRoutes from "./routes/admin-health-condition.routes.j
 import systemRoutes from "./routes/system.routes.js";
 import babyRoutes from "./routes/baby.routes.js";
 import babyProgressRoutes from "./routes/baby-progress.routes.js";
+import providerRoutes from "./routes/provider.routes.js";
+import adminProviderRoutes from "./routes/admin-provider.routes.js";
+import patientProviderInstructionRoutes from "./routes/patient-provider-instruction.routes.js";
+import providerDiscoveryRoutes from "./routes/provider-discovery.routes.js";
 
 
 
@@ -65,6 +69,10 @@ app.use("/api/system", systemRoutes);
 app.use("/api/user", pregnancyRoutes);
 app.use("/api/user", healthAssessmentRoutes);
 app.use("/api/user", pregnancyHealthConditionRoutes);
+app.use("/api/user", patientProviderInstructionRoutes);
+app.use("/api/provider", providerRoutes);
+app.use("/api/providers", providerDiscoveryRoutes);
+app.use("/api/admin/providers", adminProviderRoutes);
 app.use("/api/user/babies", babyProgressRoutes);
 app.use("/api/user/babies", babyRoutes);
 

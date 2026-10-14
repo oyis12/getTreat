@@ -1589,6 +1589,353 @@
         "verified": true
       },
       "availability": "mounted"
+    },
+    {
+      "name": "Provider Registration (4L), Provider Offerings, and Instructions (4K)",
+      "base_path": "/",
+      "description": "Provider registration/profile and admin approval (4L), provider-owned offerings and patient discovery, plus provider patient roster and patient/provider instruction views (4K). Provider subscriptions/payments remain separate from the platform subscription and require a trusted payment workflow.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/provider/me/profile",
+          "summary": "Get the authenticated provider profile",
+          "auth": "bearer",
+          "roles": [
+            "provider"
+          ],
+          "request": {},
+          "response": {
+            "status": 200,
+            "msg": "Provider profile retrieved successfully",
+            "data": "PROVIDER_PROFILE"
+          },
+          "common_errors": [
+            401,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "PUT",
+          "path": "/api/provider/me/profile",
+          "summary": "Submit or update provider registration and credentials",
+          "auth": "bearer",
+          "content_type": "multipart/form-data",
+          "roles": [
+            "provider"
+          ],
+          "request": {
+            "form_data": {
+              "professional_field": "gynecology|physiotherapist|food_nutrition|others",
+              "professional_field_other": "Required for others",
+              "years_experience": "Integer 0-80",
+              "bio": "Up to 300 characters",
+              "country": "Required",
+              "state": "Required",
+              "address": "Required",
+              "credentials_valid": "true",
+              "regulations_agreed": "true",
+              "professional_data_consent": "true",
+              "profile_image": "Optional JPG/PNG file, max 8MB",
+              "higher_institution_certificate": "Required JPG/PNG/PDF file, max 8MB",
+              "nysc_certificate": "Required certificate or exemption JPG/PNG/PDF file, max 8MB"
+            },
+            "note": "Credential files use authenticated Cloudinary delivery; response links expire after 10 minutes."
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider profile submitted successfully",
+            "data": "PROVIDER_PROFILE"
+          },
+          "common_errors": [
+            400,
+            401,
+            403
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/admin/providers",
+          "summary": "List provider profiles for approval review",
+          "auth": "bearer",
+          "roles": [
+            "admin",
+            "super_admin"
+          ],
+          "request": {
+            "query": {
+              "approval_status": "pending|approved|rejected|all (default pending)",
+              "page": "positive integer (default 1)",
+              "limit": "1-100 (default 20)"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider profiles retrieved successfully",
+            "data": {
+              "items": [
+                "PROVIDER_PROFILE_WITH_USER"
+              ],
+              "pagination": "PAGINATION"
+            }
+          },
+          "common_errors": [
+            400,
+            401,
+            403
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/admin/providers/:providerProfileId/approval",
+          "summary": "Approve or reject a provider profile",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "roles": [
+            "admin",
+            "super_admin"
+          ],
+          "request": {
+            "path_params": {
+              "providerProfileId": "PROVIDER_PROFILE_ID"
+            },
+            "body": {
+              "approval_status": "approved|rejected"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider approval status updated successfully",
+            "data": "PROVIDER_PROFILE_WITH_USER"
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404,
+            409
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/provider/me/services",
+          "summary": "List offerings owned by the authenticated approved provider",
+          "auth": "bearer",
+          "roles": ["provider"],
+          "request": {},
+          "response": {"status": 200, "msg": "Provider services retrieved successfully", "data": ["PROVIDER_SERVICE"]},
+          "common_errors": [401, 403]
+        },
+        {
+          "method": "POST",
+          "path": "/api/provider/me/services",
+          "summary": "Create a provider offering with server-calculated discounted price",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "roles": ["approved provider"],
+          "request": {"body": {"title": "Pregnancy care subscription", "original_price": 1500, "discount_percent": 10, "billing_cycle": "monthly"}},
+          "response": {"status": 201, "msg": "Provider service created successfully", "data": "PROVIDER_SERVICE"},
+          "common_errors": [400, 401, 403]
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/provider/me/services/:serviceId",
+          "summary": "Update an offering owned by the authenticated provider",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "roles": ["approved provider"],
+          "request": {"path_params": {"serviceId": "PROVIDER_SERVICE_ID"}, "body": {"title": "Updated service title", "original_price": 2000}},
+          "response": {"status": 200, "msg": "Provider service updated successfully", "data": "PROVIDER_SERVICE"},
+          "common_errors": [400, 401, 403, 404]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/provider/me/services/:serviceId",
+          "summary": "Soft archive an offering owned by the authenticated provider",
+          "auth": "bearer",
+          "roles": ["approved provider"],
+          "request": {"path_params": {"serviceId": "PROVIDER_SERVICE_ID"}},
+          "response": {"status": 200, "msg": "Provider service archived successfully", "data": "PROVIDER_SERVICE"},
+          "common_errors": [400, 401, 403, 404]
+        },
+        {
+          "method": "GET",
+          "path": "/api/providers/services",
+          "summary": "Patient discovery for active offerings from approved providers",
+          "auth": "bearer",
+          "roles": ["patient"],
+          "request": {"query": {"search": "nutrition", "professional_field": "food_nutrition", "discount_only": "true|false", "page": 1, "limit": 20}},
+          "response": {"status": 200, "msg": "Provider services retrieved successfully", "data": {"items": ["PROVIDER_SERVICE"], "pagination": "PAGINATION"}},
+          "common_errors": [400, 401, 403]
+        },
+        {
+          "method": "GET",
+          "path": "/api/providers/:providerProfileId/services",
+          "summary": "List active offerings for one approved provider",
+          "auth": "bearer",
+          "roles": ["patient"],
+          "request": {"path_params": {"providerProfileId": "PROVIDER_PROFILE_ID"}, "query": {"page": 1, "limit": 20}},
+          "response": {"status": 200, "msg": "Provider services retrieved successfully", "data": {"items": ["PROVIDER_SERVICE"], "pagination": "PAGINATION"}},
+          "common_errors": [400, 401, 403]
+        },
+        {
+          "method": "GET",
+          "path": "/api/provider/me/patients",
+          "summary": "List patients linked to the authenticated provider by subscription status",
+          "auth": "bearer",
+          "roles": [
+            "approved provider"
+          ],
+          "request": {
+            "query": {
+              "status": "all|active|expired (default all)",
+              "page": "positive integer (default 1)",
+              "limit": "1-100 (default 20)"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider patients retrieved successfully",
+            "data": {
+              "items": [
+                "PROVIDER_PATIENT"
+              ],
+              "pagination": "PAGINATION"
+            }
+          },
+          "common_errors": [
+            400,
+            401,
+            403
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/provider/patients/:patientId/instructions",
+          "summary": "Read patient instruction history while provider subscription is active",
+          "auth": "bearer",
+          "roles": [
+            "approved provider"
+          ],
+          "request": {
+            "path_params": {
+              "patientId": "PATIENT_USER_ID"
+            },
+            "query": {
+              "page": "positive integer (default 1)",
+              "limit": "1-100 (default 20)"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Patient provider instructions retrieved successfully",
+            "data": {
+              "items": [
+                "PROVIDER_INSTRUCTION"
+              ],
+              "pagination": "PAGINATION"
+            }
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/provider/patients/:patientId/instructions",
+          "summary": "Send an instruction and optional prescription to a subscribed patient",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "roles": [
+            "approved provider"
+          ],
+          "request": {
+            "path_params": {
+              "patientId": "PATIENT_USER_ID"
+            },
+            "body": {
+              "instruction": "string, required, maximum 10000 characters",
+              "prescription": "string|null, optional, maximum 10000 characters"
+            }
+          },
+          "response": {
+            "status": 201,
+            "msg": "Provider instruction sent successfully",
+            "data": "PROVIDER_INSTRUCTION"
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/provider-instructions",
+          "summary": "List the authenticated patient’s provider instructions, including history after expiry",
+          "auth": "bearer",
+          "roles": [
+            "patient"
+          ],
+          "request": {
+            "query": {
+              "page": "positive integer (default 1)",
+              "limit": "1-100 (default 20)"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider instructions retrieved successfully",
+            "data": {
+              "items": [
+                "PROVIDER_INSTRUCTION"
+              ],
+              "pagination": "PAGINATION"
+            }
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me/provider-instructions/:instructionId",
+          "summary": "Get one instruction owned by the authenticated patient",
+          "auth": "bearer",
+          "roles": [
+            "patient"
+          ],
+          "request": {
+            "path_params": {
+              "instructionId": "INSTRUCTION_ID"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Provider instruction retrieved successfully",
+            "data": "PROVIDER_INSTRUCTION"
+          },
+          "common_errors": [
+            400,
+            401,
+            403,
+            404
+          ]
+        }
+      ],
+      "source_verification": {
+        "patient_designs": "designs/patients_dashboard/dashboard/Provider’s Instruction exports",
+        "provider_designs": "designs/providers ui/patients/2.2.0 Add instruction for patients and Patients Instructions screens",
+        "verified": true
+      },
+      "availability": "mounted"
     }
   ],
   "schemas": {
@@ -2006,6 +2353,47 @@
           "active": true
         }
       ]
+    },
+    "PROVIDER_PROFILE": {
+      "id": "PROVIDER_PROFILE_ID",
+      "user": "USER_ID",
+      "professional_field": "gynecology|physiotherapist|food_nutrition|others",
+      "approval_status": "pending|approved|rejected",
+      "submitted_at": "ISO_DATETIME",
+      "approval_history": [
+        {
+          "approval_status": "pending|approved|rejected",
+          "action_by": "USER_ID",
+          "changed_at": "ISO_DATETIME"
+        }
+      ]
+    },
+    "PROVIDER_SUBSCRIPTION_ACCESS": {
+      "provider_profile": "PROVIDER_PROFILE_ID",
+      "patient_profile": "PATIENT_PROFILE_ID",
+      "status": "active|expired",
+      "starts_at": "ISO_DATETIME",
+      "ends_at": "ISO_DATETIME",
+      "note": "No public create/update route in 4K; trusted purchase/renewal lifecycle is 4M."
+    },
+    "PROVIDER_INSTRUCTION": {
+      "id": "INSTRUCTION_ID",
+      "doctor": {
+        "id": "PROVIDER_PROFILE_ID",
+        "name": "string",
+        "profession": "string"
+      },
+      "instruction": "string",
+      "prescription": "string|null",
+      "created_at": "ISO_DATETIME"
+    },
+    "PROVIDER_PATIENT": {
+      "patient_id": "USER_ID",
+      "fullname": "string",
+      "profile_image": "string|null",
+      "subscription_status": "active|expired",
+      "subscribed_at": "ISO_DATETIME",
+      "expires_at": "ISO_DATETIME"
     }
   },
   "status_codes": {

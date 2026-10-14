@@ -60,14 +60,14 @@ export const errorMiddleware = (
     if (error.code === "LIMIT_FILE_SIZE") {
       return sendError(res, {
         statusCode: 400,
-        msg: "Profile image must not exceed 5MB",
+        msg: "Each provider profile or credential file must not exceed 8MB",
       });
     }
 
     if (error.code === "LIMIT_UNEXPECTED_FILE") {
       return sendError(res, {
         statusCode: 400,
-        msg: "Only JPG, PNG, and WebP profile images are allowed",
+        msg: "Provider files must be JPG, PNG, or PDF; profile photos must be JPG or PNG",
       });
     }
 

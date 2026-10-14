@@ -1,5 +1,5 @@
 # GetTreat — Complete Development Handoff
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-14
 **Project:** GetTreat
 **Purpose:** Transfer the current project state to a new ChatGPT account / Codex session without losing development history, decisions, completed features, caveats, or the next task.
 
@@ -7,11 +7,13 @@
 
 ## 1. Exact continuation point
 
-**Current task: Phase 4J — Health Management.**
+**Current task: Provider domain implementation.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
-- **Next:** inspect approved Figma/Ready-for-Dev requirements for **4J — Health Management**, compare them with the current backend, and implement only missing work.
+- **4K — Doctor's Instructions:** implemented, tests passing.
+- **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; automated tests pass.
+- **Next:** continue with **4M — Patient ↔ Provider Subscriptions/Services**, implementing trusted purchase/payment/renewal and entitlement lifecycle. Keep it distinct from platform subscription (4O).
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
 - The complete API reference JSON was generated as `getTreat-frontend-api-reference-2026-10-03-complete.json` and provided in the previous conversation.
@@ -19,7 +21,7 @@
 
 ### First instruction for the next AI
 
-> Continue GetTreat using this handoff. We are at **Phase 4J — Health Management**. First inspect the actual current code and route mounts, then inspect the exact approved Figma frames for Health Management/Health Check. Do not redo 4H My Vitals or 4I My Baby Progress. Do not invent medical scoring or clinical rules. Report what exists, what is missing, and a small implementation/test plan before editing.
+> Continue GetTreat using this handoff. **4J Health Management, 4K Provider Instructions, and the 4L provider registration/profile/approval and offering catalogue are implemented.** Verify the current code and tests before continuing with **4M — Patient ↔ Provider Subscriptions/Services**. Do not redo completed phases or invent clinical rules. Provider purchase, trusted payment confirmation, renewal, and subscription entitlement remain to be implemented.
 
 ---
 
@@ -154,10 +156,10 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - Separate My Baby work historically numbered 4G-1 through 4G-6 — **complete**
 - 4H My Vitals, 4H-1 through 4H-7 — **complete and tested**
 - 4I My Baby Progress — **complete and tested**
-- **4J Health Management — NEXT**
-- 4K Doctor’s Instructions — upcoming
-- 4L Providers — upcoming
-- 4M Patient ↔ Provider Services — upcoming
+- 4J Health Management — **implemented and tested; clinical scoring remains deferred TODO**
+- 4K Doctor’s Instructions — **implemented and unit/model tested; subscription lifecycle integration continues in 4M**
+- **4L Provider registration/profile/approval — implemented and tested; provider offerings/discovery are also implemented as a 4M prerequisite**
+- **4M Patient ↔ Provider Subscriptions/Services — next; purchase/payment/renewal/entitlement are not implemented**
 - 4N Transactions — upcoming
 - 4O Platform Subscription — upcoming
 - 4P Community — upcoming
@@ -560,6 +562,72 @@ Do not confuse:
 
 Related concepts do not automatically need duplicate models or records.
 
+### 4K — Provider Instructions implementation update (2026-10-14)
+
+The Ready-for-Dev provider exports were reviewed under `designs/providers ui/`.
+The relevant patient flow is in `patients/`: provider patient roster, patient details,
+previous-provider instructions, and the Add Instruction & Prescription form. Patient
+instruction screens are in `designs/patients_dashboard/dashboard/`. Doctors use the
+existing `provider` role; do not introduce a separate doctor actor or role.
+
+- `ProviderProfile.user` links provider-specific profile/approval data to the central
+  `User` identity. Provider profession choices match the exported registration UI.
+- Admin/super-admin review changes are recorded in the profile's approval history.
+- `ProviderSubscription` links a `ProviderProfile` to a `PatientProfile` and stores only
+  the active/expired access period required by 4K. It has no payment, price, renewal,
+  or public create/update endpoint. The trusted subscription lifecycle is 4M.
+- A provider must have an approved profile and a currently active provider subscription
+  to list a patient's instruction history or send a new instruction.
+- Providers can list prior instructions in an active patient's history, as shown in
+  the provider UI. Patients can read their own instruction history after subscription
+  expiry. Instructions are append-only in 4K.
+- `ProviderInstruction` stores provider/patient profile references, a provider name and
+  profession snapshot, instruction text, optional prescription text, and timestamps.
+- The `Live Healthy` hero is separate content; no image or article fields were added to
+  provider instructions.
+- Postman guide: `docs/provider-instructions-api.md`. API JSON: `getTreat-api.json`.
+- Unit/policy and Mongoose schema validation tests are in
+  `tests/provider-instructions.*.test.js`.
+- Local MongoDB was unavailable (`mongod` is not installed). Do not inspect or reuse
+  the project `.env` URI for test data; it may point to a shared/production database.
+  Postman write testing requires a dedicated non-production DB and an active
+  `ProviderSubscription` fixture until 4M creates subscriptions through its trusted flow.
+
+### 4L — Provider registration, approval, offerings (2026-10-14)
+
+- Provider registration now stores professional field and optional "Others" label, years
+  of experience, bio (300 characters), country/state/address, optional profile image,
+  three explicit consents with acceptance timestamp, and credential metadata.
+- The registration screen's Higher Institution Certificate and NYSC Certificate/Letter
+  of Exemption are represented as separate required credentials before admin approval.
+  Profile photos accept JPG/PNG; credentials accept JPG/PNG/PDF, max 8MB each.
+- Provider credential assets are uploaded to Cloudinary using authenticated delivery.
+  API responses create signed download URLs with a 10-minute expiry; do not log/share.
+- Admin approval is blocked until registration fields, consent, and both credential
+  types exist. Updating core registration/profile fields after review returns the
+  application to pending. The registration message-to-GetTreat action remains unmapped
+  because no support ticket/clarification API contract exists.
+- `ProviderService` is a provider-owned offering model, separate from global `Service`
+  and `System.platform_subscription`. Providers can manage title, original NGN rate,
+  optional percent discount, and monthly/quarterly/yearly cadence; the API calculates
+  discounted price and soft-archives removed offerings.
+- Patient discovery lists active offerings from verified, active, approved providers,
+  with search, profession, discount, and pagination filters. It does not purchase or
+  activate subscriptions. It currently enforces patient authentication but not the
+  patient's GetTreat platform-subscription entitlement because the 4O subscription
+  record/gate is not implemented; connect that gate before production release.
+- This is registration and provider-offering groundwork, not completion of every
+  provider dashboard domain in the exports. Appointments, availability, messaging,
+  patient uploads/calls, posts/community/articles/reviews, notifications, transactions,
+  and settings still need their own mapped requirements/roadmap steps.
+- API docs: `docs/provider-instructions-api.md`; route reference: `getTreat-api.json`.
+- Tests: `tests/provider-registration.policy.test.js`,
+  `tests/provider-service.policy.test.js`, and expanded
+  `tests/provider-instructions.validation.test.js`.
+- Validation is offline; local MongoDB is unavailable and Cloudinary writes were not
+  attempted. Postman integration requires a dedicated non-production database and
+  configured Cloudinary test credentials.
+
 ---
 
 ## 11. API documentation JSON
@@ -671,10 +739,11 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 1. Read this handoff completely.
 2. Have the user open the **current GetTreat project folder** in the new Codex account, or provide the latest ZIP if direct code inspection is needed.
 3. Inspect actual files before asserting route mounts/contracts.
-4. Confirm: **4H My Vitals complete; 4I My Baby Progress complete; next is 4J Health Management.**
-5. Inspect exact Health Management Figma frames and existing backend.
+4. Confirm **4J/4K/4L implementation status** from current code and tests.
+5. Continue with provider subscriptions/payment/entitlements (4M), keeping platform
+   subscription access state (4O) separate.
 6. Report **already implemented / missing / uncertain**, then give a bounded implementation/test plan.
 7. Ask for clarification when clinical/product requirements are ambiguous.
 8. After every completed feature, update this handoff and API JSON.
 
-**Do not start by rebuilding authentication, pregnancy, health assessments, My Baby, Vitals, or Baby Progress. Continue at 4J.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, or completed provider registration/offering work. Continue at 4M.**
