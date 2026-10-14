@@ -174,11 +174,11 @@ The user has confirmed the following requirements for the next 4N slices:
   transaction history. Appointment APIs/payment records do not exist yet; map that
   workflow before adding appointment charge endpoints.
 
-The remaining implementation detail to map before payout processing is:
-
-- Provider bank-account setup/verification and the exact Paystack transfer approval,
-  retry, and failure-reconciliation workflow.
+Provider bank setup and payout processing are now mapped in
+`docs/provider-payouts-4n-contract.md`, including Paystack account resolution,
+recipient-code storage, idempotent transfer references, OTP handling, webhook
+reconciliation, and ledger holds. These are proposed routes and are not mounted yet.
 
 Do not implement transaction types by inferring them from mock rows. The currently
 implemented 4N endpoints remain read-only and limited to provider-service payment
-attempts until the required ledger and workflow contracts are approved.
+attempts until the ledger and payout contracts are implemented and tested.
