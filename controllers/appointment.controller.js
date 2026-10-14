@@ -35,3 +35,21 @@ export const decideProviderAppointment = async (req, res, next) => {
 export const cancelMyAppointment = async (req, res, next) => {
   try { return sendSuccess(res, { msg: "Appointment cancellation processed", data: await appointments.cancelMyAppointment(userId(req), req.params.appointmentId, req.body.reason) }); } catch (error) { next(error); }
 };
+export const listAdminAppointments = async (req, res, next) => {
+  try { return sendSuccess(res, { msg: "Appointments retrieved successfully", data: await appointments.listAdminAppointments(req.user, req.adminAppointmentList) }); } catch (error) { next(error); }
+};
+export const getAdminAppointment = async (req, res, next) => {
+  try { return sendSuccess(res, { msg: "Appointment retrieved successfully", data: await appointments.getAdminAppointment(req.user, req.params.appointmentId) }); } catch (error) { next(error); }
+};
+export const cancelAdminAppointment = async (req, res, next) => {
+  try { return sendSuccess(res, { msg: "Appointment cancellation and full refund requested", data: await appointments.cancelAdminAppointment(req.user, req.params.appointmentId, req.body.reason) }); } catch (error) { next(error); }
+};
+export const listAdminAppointmentTypes = async (req, res, next) => {
+  try { return sendSuccess(res, { msg: "Appointment types retrieved successfully", data: await appointments.listAdminAppointmentTypes(req.adminAppointmentTypeList) }); } catch (error) { next(error); }
+};
+export const createAdminAppointmentType = async (req, res, next) => {
+  try { return sendSuccess(res, { statusCode: 201, msg: "Appointment type created successfully", data: await appointments.createAdminAppointmentType(req.user, req.body) }); } catch (error) { next(error); }
+};
+export const updateAdminAppointmentType = async (req, res, next) => {
+  try { return sendSuccess(res, { msg: "Appointment type updated successfully", data: await appointments.updateAdminAppointmentType(req.user, req.params.typeId, req.body) }); } catch (error) { next(error); }
+};

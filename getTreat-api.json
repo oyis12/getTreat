@@ -166,14 +166,14 @@
     },
     {
       "name": "4N Paid Provider Appointments",
-      "base_path": "/api/appointments, /api/user/me/appointments, /api/provider/me",
-      "description": "Provider-managed digital appointment availability, patient paid booking, provider accept/decline, full Paystack refunds, and appointment ledger transactions.",
+      "base_path": "/api/appointments, /api/user/me/appointments, /api/provider/me, /api/admin/appointments",
+      "description": "Provider-managed digital appointment availability, patient paid booking, provider accept/decline, staff appointment oversight and type management, full Paystack refunds, and appointment ledger transactions.",
       "availability": "mounted",
       "documentation": "docs/appointments-4n-api.md",
       "design_mapping": {
-        "feature": "Patient booking and appointment history, provider availability and appointment decisions",
+        "feature": "Patient booking and appointment history, provider availability and appointment decisions, staff appointment oversight and appointment-type catalogue management",
         "actors": ["patient", "provider", "admin", "super_admin"],
-        "authorization": "Patients act only on their own appointments; providers act only on appointments tied to their approved provider profile. Admin appointment access is pending permission confirmation.",
+        "authorization": "Patients act only on their own appointments; providers act only on appointments tied to their approved provider profile. Admin appointment access requires manage_appointments; super_admin bypasses this permission. New admin profiles default to false.",
         "rules": ["Patient requires an active provider-service subscription for that provider before booking.", "Patient pays through Paystack before an appointment becomes pending for provider review.", "Only provider availability, duration and fee set the payable amount.", "The appointment type is selected from the active appointment-type catalogue.", "Commission is snapshotted at checkout and posted to the ledger only after Paystack verification.", "Provider decline and paid cancellation/reschedule request full refund; refund webhook reverses both ledger shares.", "In-person appointments are not enabled; approved designs mark them coming soon.", "No card data is stored by GetTreat."]
       },
       "endpoints": [
@@ -186,10 +186,16 @@
         {"method":"POST","path":"/api/user/me/appointments/:appointmentId/verify-payment","summary":"Verify appointment payment directly with Paystack","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"reference":"PAYSTACK_REFERENCE"}},"response":{"status":200,"data":{"payment_status":"success|pending|failed","appointment":"APPOINTMENT"}}},
         {"method":"POST","path":"/api/user/me/appointments/:appointmentId/cancel","summary":"Cancel/reschedule a paid appointment and request full refund","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"reason":"patient_cancelled|rescheduled"}},"response":{"status":200,"data":{"refund":{"status":"refund_pending","refund_reference":"PAYSTACK_REFUND_REFERENCE"}}}},
         {"method":"GET","path":"/api/provider/me/appointments","summary":"List appointments for the authenticated provider","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"query_params":{"page":1,"limit":20,"filter":"all|upcoming|recently_booked|completed|missed"}}},
-        {"method":"PATCH","path":"/api/provider/me/appointments/:appointmentId/decision","summary":"Accept appointment or decline it and request a full refund","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"decision":"accept|decline","reason":"Optional reason"}}}
+        {"method":"PATCH","path":"/api/provider/me/appointments/:appointmentId/decision","summary":"Accept appointment or decline it and request a full refund","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"decision":"accept|decline","reason":"Optional reason"}}},
+        {"method":"GET","path":"/api/admin/appointments","summary":"List appointments with optional status/date filters","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"],"request":{"query_params":{"page":1,"limit":20,"status":"pending","from":"2026-10-15T00:00:00.000Z","to":"2026-11-15T00:00:00.000Z"}},"response":{"status":200,"data":"PAGINATED_APPOINTMENTS_WITH_PATIENT_PROVIDER_AND_PAYMENT_SUMMARY"}},
+        {"method":"GET","path":"/api/admin/appointments/:appointmentId","summary":"Get appointment details for oversight","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"]},
+        {"method":"POST","path":"/api/admin/appointments/:appointmentId/cancel","summary":"Request cancellation and full Paystack refund for a paid pending/accepted appointment","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"],"request":{"body":{"reason":"Duplicate booking reviewed by staff"}}},
+        {"method":"GET","path":"/api/admin/appointments/types","summary":"List appointment types including inactive entries","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"],"request":{"query_params":{"page":1,"limit":20,"active":"true|false"}}},
+        {"method":"POST","path":"/api/admin/appointments/types","summary":"Create an appointment type; slug is generated by server","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"],"request":{"body":{"name":"Postnatal Consultation"}},"response":{"status":201,"data":"APPOINTMENT_TYPE"}},
+        {"method":"PATCH","path":"/api/admin/appointments/types/:typeId","summary":"Rename or activate/deactivate an appointment type","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_appointments for admin; super_admin bypasses"],"request":{"body":{"active":false}}}
       ],
       "webhook": {"method":"POST","path":"/api/payments/paystack/webhook","events":["charge.success","refund.processed","refund.failed","charge.dispute.create"],"availability":"mounted","auth":"x-paystack-signature HMAC-SHA512","description":"Appointment charge success and refund/reversal events are verified and settled idempotently. Provider-service events remain in the existing queue."},
-      "deferred_design_items": ["staff appointment management after permission is confirmed", "24-hour reminder scheduling while worker hosting remains paused", "appointment type management endpoints pending staff permission decision", "receipt generation"]
+      "deferred_design_items": ["24-hour reminder scheduling while worker hosting remains paused", "receipt generation"]
     },
     {
       "name": "Authentication",

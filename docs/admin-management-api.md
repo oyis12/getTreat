@@ -93,6 +93,7 @@ Content-Type: application/json
     "manage_assessments": false,
     "manage_community": false,
     "manage_transactions": false,
+    "manage_appointments": false,
     "manage_admins": false
   }
 }

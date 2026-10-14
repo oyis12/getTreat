@@ -11,6 +11,7 @@ export const adminPermissionKeys = [
   'manage_assessments',
   'manage_community',
   'manage_transactions',
+  'manage_appointments',
   'manage_admins',
 ];
 

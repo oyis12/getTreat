@@ -45,6 +45,7 @@ const serializeAppointment = (appointment, payment = null) => ({
   reason: appointment.reason,
   fee: { amount: appointment.fee_amount, currency: appointment.currency },
   status: appointment.status,
+  cancellation_reason: appointment.cancellation_reason ?? null,
   provider: appointment.provider_profile?.user ? { fullname: appointment.provider_profile.user.fullname ?? null, professional_field: appointment.provider_profile.professional_field ?? null } : undefined,
   patient: appointment.patient_profile?.user ? { fullname: appointment.patient_profile.user.fullname ?? null } : undefined,
   payment: payment ? { reference: payment.reference, status: payment.status, authorization_url: payment.authorization_url } : undefined,
@@ -99,6 +100,52 @@ export const setMyProviderAvailability = async (userId, payload) => {
 };
 
 export const listAppointmentTypes = async () => AppointmentType.find({ active: true }).sort({ name: 1 }).select("name slug").lean().then((items) => items.map((item) => ({ id: item._id.toString(), name: item.name, slug: item.slug })));
+
+const serializeAppointmentType = (type) => ({ id: type._id.toString(), name: type.name, slug: type.slug, active: type.active, created_at: type.createdAt, modified_at: type.modifiedAt });
+const slugifyAppointmentType = (name) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+export const listAdminAppointmentTypes = async ({ page = 1, limit = 20, active } = {}) => {
+  const query = active === undefined ? {} : { active };
+  const [items, total] = await Promise.all([
+    AppointmentType.find(query).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    AppointmentType.countDocuments(query),
+  ]);
+  return { items: items.map(serializeAppointmentType), pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+};
+
+export const createAdminAppointmentType = async (actor, { name }) => {
+  const normalized = name.trim();
+  const slug = slugifyAppointmentType(normalized);
+  if (!slug) throw new AppError("Appointment type name must contain letters or numbers", 400);
+  try {
+    const type = await AppointmentType.create({ name: normalized, slug, active: true, created_by: actor._id });
+    await writeAuditEvent({ eventKey: `appointment-type:${type._id}:created`, actor: actor._id, actorRole: actor.role, action: "appointment_type_created", resourceType: "appointment_type", resourceId: type._id, newState: "active", metadata: { slug } });
+    return serializeAppointmentType(type);
+  } catch (error) {
+    if (error.code === 11000) throw new AppError("An appointment type with this name already exists", 409);
+    throw error;
+  }
+};
+
+export const updateAdminAppointmentType = async (actor, typeId, changes) => {
+  if (!validId(typeId)) throw new AppError("Invalid appointment type ID", 400);
+  const type = await AppointmentType.findById(typeId);
+  if (!type) throw new AppError("Appointment type not found", 404);
+  const priorState = type.active ? "active" : "inactive";
+  if (changes.name !== undefined) {
+    const slug = slugifyAppointmentType(changes.name);
+    if (!slug) throw new AppError("Appointment type name must contain letters or numbers", 400);
+    type.name = changes.name.trim();
+    type.slug = slug;
+  }
+  if (changes.active !== undefined) type.active = changes.active;
+  try { await type.save(); } catch (error) {
+    if (error.code === 11000) throw new AppError("An appointment type with this name already exists", 409);
+    throw error;
+  }
+  await writeAuditEvent({ eventKey: `appointment-type:${type._id}:updated:${type.modifiedAt.getTime()}`, actor: actor._id, actorRole: actor.role, action: type.active ? "appointment_type_updated" : "appointment_type_deactivated", resourceType: "appointment_type", resourceId: type._id, priorState, newState: type.active ? "active" : "inactive", metadata: { name_changed: changes.name !== undefined } });
+  return serializeAppointmentType(type);
+};
 
 export const startPatientAppointment = async (userId, payload, idempotencyKey) => {
   const { user, profile: patient } = await getPatient(userId);
@@ -246,6 +293,49 @@ export const listMyAppointments = async (userId, actor, { page = 1, limit = 20, 
     items: items.map((item) => serializeAppointment(item, item.payment_attempt)),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   };
+};
+
+const appointmentStaffFilter = ({ status, from, to }) => {
+  const query = {};
+  if (status) query.status = status;
+  if (from || to) query.starts_at = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+  return query;
+};
+
+const populateStaffAppointment = (query) => query
+  .populate({ path: "provider_profile", select: "professional_field profession user", populate: { path: "user", select: "fullname email" } })
+  .populate({ path: "patient_profile", select: "user", populate: { path: "user", select: "fullname email" } })
+  .populate({ path: "payment_attempt", select: "reference status amount_kobo currency platform_fee_kobo provider_net_kobo refund_reference failure_reason createdAt" });
+
+export const listAdminAppointments = async (actor, { page = 1, limit = 20, status, from, to }) => {
+  const query = appointmentStaffFilter({ status, from, to });
+  const [items, total] = await Promise.all([
+    populateStaffAppointment(Appointment.find(query).sort({ starts_at: -1 }).skip((page - 1) * limit).limit(limit)).lean(),
+    Appointment.countDocuments(query),
+  ]);
+  await writeAuditEvent({ eventKey: `admin-appointment-list:${actor._id}:${new Date().toISOString()}`, actor: actor._id, actorRole: actor.role, action: "appointment_list_viewed", resourceType: "appointment_collection", metadata: { page, limit, status: status ?? null, from: from ?? null, to: to ?? null } });
+  return { items: items.map((item) => serializeAppointment(item, item.payment_attempt)), pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+};
+
+export const getAdminAppointment = async (actor, appointmentId) => {
+  if (!validId(appointmentId)) throw new AppError("Invalid appointment ID", 400);
+  const appointment = await populateStaffAppointment(Appointment.findById(appointmentId)).lean();
+  if (!appointment) throw new AppError("Appointment not found", 404);
+  await writeAuditEvent({ eventKey: `admin-appointment-view:${actor._id}:${appointment._id}:${new Date().toISOString()}`, actor: actor._id, actorRole: actor.role, action: "appointment_detail_viewed", resourceType: "appointment", resourceId: appointment._id });
+  return serializeAppointment(appointment, appointment.payment_attempt);
+};
+
+export const cancelAdminAppointment = async (actor, appointmentId, reason) => {
+  if (!validId(appointmentId)) throw new AppError("Invalid appointment ID", 400);
+  const appointment = await Appointment.findById(appointmentId);
+  if (!appointment) throw new AppError("Appointment not found", 404);
+  if (!['pending', 'accepted'].includes(appointment.status)) throw new AppError("Only pending or accepted paid appointments can be cancelled by staff", 409);
+  const priorState = appointment.status;
+  appointment.cancellation_reason = reason;
+  await appointment.save();
+  await writeAuditEvent({ eventKey: `appointment:${appointment._id}:admin-cancellation-requested`, actor: actor._id, actorRole: actor.role, action: "appointment_cancellation_requested_by_staff", resourceType: "appointment", resourceId: appointment._id, priorState, newState: "refund_pending" });
+  const refund = await requestFullRefund(appointment, actor._id, actor.role, "admin_cancelled");
+  return { appointment: serializeAppointment(appointment), refund };
 };
 
 const requestFullRefund = async (appointment, actorUser, actorRole, reason) => {

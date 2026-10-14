@@ -6,7 +6,7 @@ import AppointmentPaymentAttempt from "../models/appointment-payment-attempt.mod
 import AppointmentType from "../models/appointment-type.model.js";
 import ProviderAvailability from "../models/provider-availability.model.js";
 import { calculateProviderPaymentSplit } from "../services/financial-ledger.service.js";
-import { validateAvailabilityPayload, validateStartAppointment, validateAppointmentListQuery } from "../validators/appointment.validator.js";
+import { validateAvailabilityPayload, validateStartAppointment, validateAppointmentListQuery, validateAdminAppointmentListQuery, validateAdminAppointmentTypeListQuery, validateAppointmentTypeCreate, validateAppointmentTypeUpdate, validateAdminAppointmentCancellation } from "../validators/appointment.validator.js";
 
 const runMiddleware = (middleware, req) => new Promise((resolve, reject) => middleware(req, {}, (error) => error ? reject(error) : resolve(req)));
 const validId = () => new mongoose.Types.ObjectId().toString();
@@ -24,6 +24,7 @@ test("4N appointment records enforce actor, subscription, slot, and paid-pending
   await assert.doesNotReject(appointment.validate());
   appointment.status = "booked";
   await assert.rejects(appointment.validate());
+  assert.equal(Appointment.schema.path("cancellation_reason").instance, "String");
   const slotIndex = Appointment.schema.indexes().find(([keys, options]) => keys.provider_profile && keys.starts_at && options.unique);
   assert.ok(slotIndex);
   assert.deepEqual(slotIndex[1].partialFilterExpression.status.$in, ["pending", "accepted", "pending_payment"]);
@@ -73,4 +74,23 @@ test("availability and patient booking validators reject unsafe or unsupported v
   await assert.rejects(runMiddleware(validateStartAppointment, { ...request, body: { ...request.body, fee_amount: 1 } }), /Unknown appointment field/);
   await runMiddleware(validateAppointmentListQuery, { query: { page: "2", limit: "15", filter: "upcoming" } }).then((req) => assert.deepEqual(req.appointmentList, { page: 2, limit: 15, filter: "upcoming" }));
   await assert.rejects(runMiddleware(validateAppointmentListQuery, { query: { limit: "1000" } }), /limit must be from 1 to 100/);
+});
+
+test("admin appointment and appointment-type validators bound filters and reject mass assignment", async () => {
+  const query = { query: { page: "2", limit: "25", status: "pending", from: "2026-10-15T00:00:00.000Z", to: "2026-10-20T00:00:00.000Z" } };
+  await runMiddleware(validateAdminAppointmentListQuery, query);
+  assert.deepEqual(query.adminAppointmentList, { page: 2, limit: 25, status: "pending", from: "2026-10-15T00:00:00.000Z", to: "2026-10-20T00:00:00.000Z" });
+  await assert.rejects(runMiddleware(validateAdminAppointmentListQuery, { query: { status: "unknown" } }), /not a supported appointment status/);
+  await assert.rejects(runMiddleware(validateAdminAppointmentListQuery, { query: { status: "refunded" } }), /not a supported appointment status/);
+  await assert.rejects(runMiddleware(validateAdminAppointmentListQuery, { query: { from: "2026-10-20T00:00:00Z", to: "2026-10-19T00:00:00Z" } }), /from must be earlier/);
+
+  const typeList = { query: { active: "false" } };
+  await runMiddleware(validateAdminAppointmentTypeListQuery, typeList);
+  assert.deepEqual(typeList.adminAppointmentTypeList, { page: 1, limit: 20, active: false });
+  await runMiddleware(validateAppointmentTypeCreate, { body: { name: "  Nutrition Plan  " } }).then((req) => assert.equal(req.body.name, "Nutrition Plan"));
+  await assert.rejects(runMiddleware(validateAppointmentTypeCreate, { body: { name: "Consultation", active: false } }), /Unknown appointment type field/);
+  await runMiddleware(validateAppointmentTypeUpdate, { params: { typeId: validId() }, body: { active: false } });
+  await assert.rejects(runMiddleware(validateAppointmentTypeUpdate, { params: { typeId: validId() }, body: { slug: "arbitrary" } }), /Unknown appointment type field/);
+  await runMiddleware(validateAdminAppointmentCancellation, { params: { appointmentId: validId() }, body: { reason: "Duplicate booking" } });
+  await assert.rejects(runMiddleware(validateAdminAppointmentCancellation, { params: { appointmentId: validId() }, body: { reason: " " } }), /reason must contain/);
 });

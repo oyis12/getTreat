@@ -20,6 +20,7 @@ const appointmentSchema = new Schema({
   rescheduled_from: { type: Schema.Types.ObjectId, ref: "Appointment", default: null },
   decision_reason: { type: String, trim: true, maxlength: 300, default: null },
   decided_at: { type: Date, default: null },
+  cancellation_reason: { type: String, trim: true, maxlength: 300, default: null },
 }, { timestamps: { createdAt: "createdAt", updatedAt: "modifiedAt" }, versionKey: false });
 
 appointmentSchema.index({ provider_profile: 1, starts_at: 1, status: 1 });

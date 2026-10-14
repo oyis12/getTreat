@@ -791,12 +791,14 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
    the intended MongoDB database. Review current platform commission and legacy payment
    records before deciding whether to run the explicit historical earnings backfill.
    Paid appointments now have a mapped and implemented patient/provider payment slice;
-   see `docs/appointments-4n-api.md`. Admin appointment access still awaits the user's
-   permission decision. Platform subscriptions remain 4O and ads are out of scope.
+   see `docs/appointments-4n-api.md`. Admin appointment access and appointment-type
+   management are mounted behind `manage_appointments`; super admins bypass that
+   permission and new admin profiles default it to false. Platform subscriptions remain
+   4O and ads are out of scope.
 7. Ask for clarification when clinical/product requirements are ambiguous.
 8. After every completed feature, update this handoff and API JSON.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N includes provider-service and appointment payments, commission ledger, Paystack refunds/payouts, and transaction history. Admin appointment management is awaiting the staff-permission decision; 4O platform subscription remains future work. Ads are out of scope. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N includes provider-service and appointment payments, commission ledger, Paystack refunds/payouts, transaction history, and admin appointment oversight/type management behind `manage_appointments`; 4O platform subscription remains future work. Ads are out of scope. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
 
 ---
 
@@ -821,10 +823,11 @@ Files: `models/appointment*.model.js`, `models/provider-availability.model.js`,
 `docs/appointments-4n-api.md`, `tests/appointment.4n.test.js`.
 
 The admin/super-admin Figma includes appointment oversight, cancellation and
-rescheduling. The user was asked which explicit permission should gate staff operations
-(`manage_appointments` versus existing permission domains); do not add staff routes or
-permission keys until they answer. Appointment-type management endpoints also await that
-decision. The user's response for admin appointment permissions is still pending.
+rescheduling. The user selected a dedicated `manage_appointments` permission for regular
+admins; super admins bypass permission checks. Staff can list/filter and inspect
+appointments, cancel paid pending/accepted bookings with full Paystack refund, and manage
+the appointment-type catalogue. Rescheduling refunds the old booking; the patient makes a
+new paid booking. Catalogue type deactivation preserves historical snapshots.
 
 The user previously deferred Render worker deployment while developing. Appointment
 charge/refund webhooks are processed inline in the existing signed webhook path; the
@@ -833,6 +836,7 @@ queue/renewal automation remains deferred. 24-hour reminders require a future
 notification worker. Do not enable/deploy a worker without the user's explicit resume
 request.
 
-Automated tests run during implementation: `npm test` — 69 passed, 0 failed. No live
-MongoDB, Render, Paystack checkout/refund, or Postman call was performed. Repeat the
-suite after the pending admin authorization boundary is implemented.
+Automated tests run during implementation: `npm test` — 73 passed, 0 failed after adding
+staff routes and validators. No live MongoDB, Render, Paystack checkout/refund, or
+Postman call was performed. The appointment index migration was not run against a
+database.

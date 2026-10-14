@@ -104,3 +104,69 @@ export const validateAppointmentListQuery = (req, _res, next) => {
     next();
   } catch (error) { next(error); }
 };
+
+export const validateAdminAppointmentListQuery = (req, _res, next) => {
+  try {
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 20);
+    const status = req.query.status;
+    const from = req.query.from;
+    const to = req.query.to;
+    const statuses = ["pending_payment", "pending", "accepted", "declined", "cancelled", "reschedule_pending", "completed", "missed"];
+    const unknown = Object.keys(req.query).filter((key) => !["page", "limit", "status", "from", "to"].includes(key));
+    if (unknown.length) throw new AppError(`Unknown appointment query parameter(s): ${unknown.join(", ")}`, 400);
+    if (!Number.isInteger(page) || page < 1) throw new AppError("page must be a positive integer", 400);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new AppError("limit must be from 1 to 100", 400);
+    if (status !== undefined && !statuses.includes(status)) throw new AppError("status is not a supported appointment status", 400);
+    for (const [name, value] of [["from", from], ["to", to]]) if (value !== undefined && (!/^\d{4}-\d{2}-\d{2}T/.test(value) || !Number.isFinite(Date.parse(value)))) throw new AppError(`${name} must be an ISO date-time`, 400);
+    if (from && to && Date.parse(from) > Date.parse(to)) throw new AppError("from must be earlier than or equal to to", 400);
+    req.adminAppointmentList = { page, limit, ...(status ? { status } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) };
+    next();
+  } catch (error) { next(error); }
+};
+
+export const validateAdminAppointmentTypeListQuery = (req, _res, next) => {
+  try {
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 20);
+    const active = req.query.active;
+    const unknown = Object.keys(req.query).filter((key) => !["page", "limit", "active"].includes(key));
+    if (unknown.length) throw new AppError(`Unknown appointment type query parameter(s): ${unknown.join(", ")}`, 400);
+    if (!Number.isInteger(page) || page < 1) throw new AppError("page must be a positive integer", 400);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new AppError("limit must be from 1 to 100", 400);
+    if (active !== undefined && !["true", "false"].includes(active)) throw new AppError("active must be true or false", 400);
+    req.adminAppointmentTypeList = { page, limit, ...(active === undefined ? {} : { active: active === "true" }) };
+    next();
+  } catch (error) { next(error); }
+};
+
+export const validateAppointmentTypeCreate = (req, _res, next) => {
+  try {
+    rejectUnknown(req.body, ["name"], "appointment type");
+    if (typeof req.body.name !== "string" || req.body.name.trim().length < 2 || req.body.name.trim().length > 100) throw new AppError("name must contain 2 to 100 characters", 400);
+    req.body.name = req.body.name.trim();
+    next();
+  } catch (error) { next(error); }
+};
+
+export const validateAppointmentTypeUpdate = (req, _res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.typeId)) throw new AppError("Invalid appointment type ID", 400);
+    rejectUnknown(req.body, ["name", "active"], "appointment type");
+    if (!Object.keys(req.body).length) throw new AppError("At least one appointment type field is required", 400);
+    if (req.body.name !== undefined && (typeof req.body.name !== "string" || req.body.name.trim().length < 2 || req.body.name.trim().length > 100)) throw new AppError("name must contain 2 to 100 characters", 400);
+    if (req.body.name !== undefined) req.body.name = req.body.name.trim();
+    if (req.body.active !== undefined && typeof req.body.active !== "boolean") throw new AppError("active must be a boolean", 400);
+    next();
+  } catch (error) { next(error); }
+};
+
+export const validateAdminAppointmentCancellation = (req, _res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.appointmentId)) throw new AppError("Invalid appointment ID", 400);
+    rejectUnknown(req.body, ["reason"], "appointment cancellation");
+    if (typeof req.body.reason !== "string" || req.body.reason.trim().length < 3 || req.body.reason.trim().length > 300) throw new AppError("reason must contain 3 to 300 characters", 400);
+    req.body.reason = req.body.reason.trim();
+    next();
+  } catch (error) { next(error); }
+};

@@ -170,6 +170,74 @@ responses include `commission_rate_percent`, `platform_fee` and `provider_net`. 
 responses omit provider earnings breakdowns. Ledger posting and reversal are
 idempotency-keyed and audited.
 
+## Admin appointment oversight and catalogue
+
+All staff routes below require a Bearer access token with role `admin` or
+`super_admin`. Regular admins must have the explicit `manage_appointments`
+permission; super admins bypass the permission check. New admin profiles default to
+`manage_appointments: false`, so a super admin must grant it. Appointment list and
+detail reads are audited without copying patient reason text into the audit metadata.
+
+| Method | Route | Access |
+| --- | --- | --- |
+| GET | `/api/admin/appointments?page=1&limit=20&status=pending&from=2026-10-15T00:00:00.000Z&to=2026-11-15T00:00:00.000Z` | `manage_appointments` |
+| GET | `/api/admin/appointments/:appointmentId` | `manage_appointments` |
+| POST | `/api/admin/appointments/:appointmentId/cancel` | `manage_appointments`; paid pending/accepted only |
+| GET | `/api/admin/appointments/types?page=1&limit=20&active=true` | `manage_appointments` |
+| POST | `/api/admin/appointments/types` | `manage_appointments` |
+| PATCH | `/api/admin/appointments/types/:typeId` | `manage_appointments` |
+
+List filters are optional and bounded: `status` is an appointment status, `from` and
+`to` are ISO date-times, `limit` is 1–100. Appointment type `active` accepts `true`
+or `false`. Type names produce their slugs server-side. Deactivate a type with
+`{"active":false}` rather than deleting it; appointment history retains its name
+snapshot.
+
+Admin cancellation requires a reason and requests a full Paystack refund. The booking
+remains in its current status while the refund is pending; the signed Paystack
+refund/reversal webhook finalizes its cancelled state and reverses both ledger shares.
+Rescheduling follows the approved full-refund rule: staff
+cancels/refunds the old booking and the patient creates and pays for a new booking.
+Appointment types can be edited or deactivated; historical appointment labels remain
+unchanged.
+
+Copy-ready Postman requests:
+
+```http
+GET {{API_BASE_URL}}/api/admin/appointments?page=1&limit=20&status=pending
+Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}
+```
+
+```http
+POST {{API_BASE_URL}}/api/admin/appointments/{{APPOINTMENT_ID}}/cancel
+Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}
+Content-Type: application/json
+
+{"reason":"Duplicate booking reviewed by staff"}
+```
+
+```http
+POST {{API_BASE_URL}}/api/admin/appointments/types
+Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}
+Content-Type: application/json
+
+{"name":"Postnatal Consultation"}
+```
+
+```http
+PATCH {{API_BASE_URL}}/api/admin/appointments/types/{{APPOINTMENT_TYPE_ID}}
+Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}
+Content-Type: application/json
+
+{"active":false}
+```
+
+Successful reads/updates return HTTP 200; type creation returns 201. Validation errors
+return 400, missing resources 404, duplicate type names 409, and missing permission
+403. Use `API_BASE_URL`, `ADMIN_ACCESS_TOKEN`, `APPOINTMENT_ID`, and
+`APPOINTMENT_TYPE_ID` Postman variables. No idempotency header is used for admin
+cancellation; the payment attempt is claimed atomically before requesting the refund.
+
 ## Status codes and Postman
 
 - `200`: existing checkout retry, successful read/update/decision/payment verification.
@@ -192,7 +260,7 @@ types only if they do not exist and will not overwrite later edits. Run
 `CREATE_APPOINTMENT_INDEXES=true npm run migrate:appointment-indexes` against the intended MongoDB deployment before
 serving production appointment requests; it creates provider slot uniqueness and
 payment idempotency indexes and was not run against a database during this task. Admin
-appointment moderation/management routes are not mounted until the authorized staff
-permission for appointment screens is confirmed. Appointment payment/refund events are
+appointment moderation/management routes are mounted under `manage_appointments`.
+Appointment payment/refund events are
 processed inline by the signed webhook handler; the 24-hour reminder still requires
 resuming the deferred billing/notification worker.

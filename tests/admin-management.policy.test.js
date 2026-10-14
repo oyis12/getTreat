@@ -16,6 +16,8 @@ test('admin profile links to a User and has explicit false-by-default permission
   await assert.doesNotReject(profile.validate());
   assert.equal(profile.admin_type, 'control_admin');
   for (const key of adminPermissionKeys) assert.equal(profile.permissions[key], false);
+  assert.ok(adminPermissionKeys.includes('manage_appointments'));
+  assert.equal(profile.permissions.manage_appointments, false);
 });
 
 test('super-admin create-admin request requires valid identity, password and explicit permission values', async () => {
@@ -54,5 +56,14 @@ test('super admins bypass admin permission scopes while non-admin roles are deni
   const patientError = await new Promise((resolve) => middleware(
     { user: { role: 'patient' } }, {}, (error) => resolve(error ?? null)
   ));
+  assert.equal(patientError.statusCode, 403);
+});
+
+test('appointment management permission is an explicit admin grant and super-admin bypass applies', async () => {
+  assert.ok(adminPermissionKeys.includes('manage_appointments'));
+  const middleware = requireAdminPermission('manage_appointments');
+  const superAdminError = await new Promise((resolve) => middleware({ user: { role: 'super_admin' } }, {}, (error) => resolve(error ?? null)));
+  assert.equal(superAdminError, null);
+  const patientError = await new Promise((resolve) => middleware({ user: { role: 'patient' } }, {}, (error) => resolve(error ?? null)));
   assert.equal(patientError.statusCode, 403);
 });
