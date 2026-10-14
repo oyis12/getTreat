@@ -7,10 +7,11 @@ service subscription commission snapshots, immutable provider/platform ledger en
 masked Paystack payout methods, provider earnings and withdrawal requests, admin payout
 review/transfer actions, audit timelines, and Paystack transfer webhook handling.
 
-Paid appointment checkout is not implemented because the appointment domain/payment
-records do not exist. Appointment payments must use the same ledger/commission helper
-when that feature is built. GetTreat platform subscriptions stay in 4O. Ads and patient
-wallet/deposit features are out of scope. No card details are stored.
+Paid appointments now use a separate appointment payment-attempt model and the same
+commission/ledger rules. See [appointments-4n-api.md](appointments-4n-api.md) for their
+booking, payment, refund and provider decision routes. GetTreat platform subscriptions
+stay in 4O. Ads and patient wallet/deposit features are out of scope. No card details
+are stored.
 
 All protected requests use:
 

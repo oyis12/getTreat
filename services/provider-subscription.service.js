@@ -484,9 +484,7 @@ export const enqueuePaystackWebhook = async (rawBody, signature, body) => {
   if (!verifyPaystackWebhookSignature(rawBody, signature)) throw new AppError("Invalid Paystack webhook signature", 401);
   const eventType = typeof body?.event === "string" ? body.event : "unknown";
   const transaction = body?.data?.transaction;
-  const reference = typeof body?.data?.reference === "string"
-    ? body.data.reference
-    : typeof transaction?.reference === "string" ? transaction.reference : null;
+  const reference = getPaystackEventReference(body);
   const gatewayTransactionId = transaction && typeof transaction === "object"
     ? transaction.id == null ? null : String(transaction.id)
     : transaction == null
@@ -509,8 +507,33 @@ export const enqueuePaystackWebhook = async (rawBody, signature, body) => {
       event.status = handled ? "processed" : "ignored";
       event.processed_at = new Date();
       await event.save();
+    } else if (["charge.success", "refund.processed", "refund.failed", "charge.dispute.create"].includes(eventType)) {
+      const { getAppointmentPaymentForWebhook, fulfillVerifiedAppointmentPayment, processAppointmentRefund } = await import("./appointment.service.js");
+      const appointmentAttempt = await getAppointmentPaymentForWebhook(reference);
+      if (appointmentAttempt) {
+        if (eventType === "charge.success") {
+          const payment = await verifyPaystackTransaction(reference);
+          await fulfillVerifiedAppointmentPayment(reference, payment);
+        } else if (eventType === "refund.failed") {
+          await processAppointmentRefundFailure(reference, body?.data);
+        } else {
+          await processAppointmentRefund(reference, eventType);
+        }
+        event.status = "processed";
+        event.processed_at = new Date();
+        event.lock_expires_at = null;
+        await event.save();
+      }
     }
   }
+};
+
+export const getPaystackEventReference = (body) => {
+  const transaction = body?.data?.transaction;
+  if (typeof body?.data?.reference === "string") return body.data.reference;
+  if (typeof body?.data?.transaction_reference === "string") return body.data.transaction_reference;
+  if (typeof transaction?.reference === "string") return transaction.reference;
+  return null;
 };
 
 export const processPendingPaystackWebhooks = async (limit = 100) => {
@@ -524,7 +547,7 @@ export const processPendingPaystackWebhooks = async (limit = 100) => {
     );
     if (!event) break;
     try {
-      const recognized = ["charge.success", "refund.processed", "charge.dispute.create"].includes(event.event_type);
+      const recognized = ["charge.success", "refund.processed", "refund.failed", "charge.dispute.create"].includes(event.event_type);
       const reference = recognized ? await resolveWebhookReference(event) : null;
       if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event_type) && reference) {
         const { verifyPaystackTransfer } = await import("./paystack.service.js");
@@ -535,10 +558,17 @@ export const processPendingPaystackWebhooks = async (limit = 100) => {
         event.status = "processed";
       } else if (event.event_type === "charge.success" && reference) {
         const payment = await verifyPaystackTransaction(reference);
-        await fulfillVerifiedPayment(reference, payment);
+        const { getAppointmentPaymentForWebhook, fulfillVerifiedAppointmentPayment } = await import("./appointment.service.js");
+        const appointmentAttempt = await getAppointmentPaymentForWebhook(reference);
+        if (appointmentAttempt) await fulfillVerifiedAppointmentPayment(reference, payment);
+        else await fulfillVerifiedPayment(reference, payment);
         event.status = "processed";
-      } else if (["refund.processed", "charge.dispute.create"].includes(event.event_type) && reference) {
-        await revokeSubscriptionForPayment(reference, event.event_type === "refund.processed" ? "refunded" : "reversed");
+      } else if (["refund.processed", "refund.failed", "charge.dispute.create"].includes(event.event_type) && reference) {
+        const { processAppointmentRefund, processAppointmentRefundFailure } = await import("./appointment.service.js");
+        const handled = event.event_type === "refund.failed"
+          ? await processAppointmentRefundFailure(reference, event)
+          : await processAppointmentRefund(reference, event.event_type);
+        if (!handled && event.event_type !== "refund.failed") await revokeSubscriptionForPayment(reference, event.event_type === "refund.processed" ? "refunded" : "reversed");
         event.status = "processed";
       } else {
         event.status = "ignored";
@@ -564,6 +594,9 @@ const resolveWebhookReference = async (event) => {
   if (!event.gateway_transaction_id) return null;
   const attempt = await ProviderPaymentAttempt.findOne({ gateway_transaction_id: event.gateway_transaction_id }).select("reference");
   if (attempt) return attempt.reference;
+  const { getAppointmentPaymentForWebhook } = await import("./appointment.service.js");
+  const appointmentAttempt = await getAppointmentPaymentForWebhook(null, event.gateway_transaction_id);
+  if (appointmentAttempt) return appointmentAttempt.reference;
   const transaction = await getPaystackTransaction(event.gateway_transaction_id);
   return transaction?.reference ?? null;
 };

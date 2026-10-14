@@ -48,6 +48,12 @@ export const verifyPaystackTransaction = (reference) =>
 export const getPaystackTransaction = (transactionId) =>
   paystackRequest(`/transaction/${encodeURIComponent(transactionId)}`);
 
+export const refundPaystackTransaction = ({ transactionId, customerNote, merchantNote }) =>
+  paystackRequest("/refund", {
+    method: "POST",
+    body: { transaction: transactionId, currency: "NGN", customer_note: customerNote, merchant_note: merchantNote },
+  });
+
 export const listPaystackBanks = ({ country = "nigeria", currency = "NGN" } = {}) => {
   const query = new URLSearchParams({ country, currency, perPage: "100" });
   return paystackRequest(`/bank?${query}`);

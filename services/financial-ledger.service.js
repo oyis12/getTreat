@@ -140,3 +140,37 @@ export const reverseProviderPaymentEarnings = async (attempt, reason, { session,
   });
   return true;
 };
+
+export const postAppointmentPaymentEarnings = async (attempt, { session }) => {
+  const providerKey = `appointment-payment:${attempt._id}:provider-credit`;
+  if (await ProviderLedgerEntry.exists({ source_key: providerKey }).session(session)) return false;
+  await createLedgerEntry({
+    provider_profile: attempt.provider_profile, account: "provider", entry_type: "provider_earning",
+    amount_kobo: attempt.provider_net_kobo, source_type: "appointment_payment", source_id: attempt._id,
+    source_key: providerKey, commission_rate_percent: attempt.commission_rate_percent,
+    description: "Successful appointment payment earning",
+  }, session);
+  await createLedgerEntry({
+    provider_profile: attempt.provider_profile, account: "platform", entry_type: "platform_commission",
+    amount_kobo: attempt.platform_fee_kobo, source_type: "appointment_payment", source_id: attempt._id,
+    source_key: `appointment-payment:${attempt._id}:platform-fee`, commission_rate_percent: attempt.commission_rate_percent,
+    description: "Platform commission from appointment payment",
+  }, session);
+  await ProviderBalance.findOneAndUpdate(
+    { provider_profile: attempt.provider_profile },
+    { $inc: { available_kobo: attempt.provider_net_kobo }, $set: { modified_at: new Date() }, $setOnInsert: { currency: "NGN", reserved_kobo: 0 } },
+    { new: true, upsert: true, session, setDefaultsOnInsert: true }
+  );
+  await writeAuditEvent({ eventKey: `${providerKey}:audit`, actorRole: "system", action: "appointment_payment_earnings_posted", resourceType: "appointment_payment_attempt", resourceId: attempt._id, newState: "success", correlationId: attempt.reference, metadata: { gross_kobo: attempt.amount_kobo, platform_fee_kobo: attempt.platform_fee_kobo, provider_net_kobo: attempt.provider_net_kobo, commission_rate_percent: attempt.commission_rate_percent }, session });
+  return true;
+};
+
+export const reverseAppointmentPaymentEarnings = async (attempt, reason, { session, actor = null, actorRole = "system" } = {}) => {
+  const providerKey = `appointment-payment:${attempt._id}:reversal-provider`;
+  if (await ProviderLedgerEntry.exists({ source_key: providerKey }).session(session ?? null)) return false;
+  await createLedgerEntry({ provider_profile: attempt.provider_profile, account: "provider", entry_type: "payment_reversal", amount_kobo: -attempt.provider_net_kobo, source_type: reason === "refunded" ? "refund" : "reversal", source_id: attempt._id, source_key: providerKey, commission_rate_percent: attempt.commission_rate_percent, description: `Appointment provider earnings reversed: ${reason}`, actor }, session);
+  await createLedgerEntry({ provider_profile: attempt.provider_profile, account: "platform", entry_type: "payment_reversal", amount_kobo: -attempt.platform_fee_kobo, source_type: reason === "refunded" ? "refund" : "reversal", source_id: attempt._id, source_key: `appointment-payment:${attempt._id}:reversal-platform`, commission_rate_percent: attempt.commission_rate_percent, description: `Appointment platform commission reversed: ${reason}`, actor }, session);
+  await ProviderBalance.updateOne({ provider_profile: attempt.provider_profile }, { $inc: { available_kobo: -attempt.provider_net_kobo }, $set: { modified_at: new Date() } }, { session });
+  await writeAuditEvent({ eventKey: `${providerKey}:audit`, actor, actorRole, action: "appointment_payment_earnings_reversed", resourceType: "appointment_payment_attempt", resourceId: attempt._id, priorState: "success", newState: reason, correlationId: attempt.reference, metadata: { platform_fee_kobo_reversed: attempt.platform_fee_kobo, provider_net_kobo_reversed: attempt.provider_net_kobo }, session });
+  return true;
+};

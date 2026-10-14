@@ -1,5 +1,5 @@
 # GetTreat — Complete Development Handoff
-**Last updated:** 2026-10-14
+**Last updated:** 2026-10-15
 **Project:** GetTreat
 **Purpose:** Transfer the current project state to a new ChatGPT account / Codex session without losing development history, decisions, completed features, caveats, or the next task.
 
@@ -7,7 +7,7 @@
 
 ## 1. Exact continuation point
 
-**Current phase: 4N — Transactions, provider commission ledger and payouts. Provider-service transaction history, commission settings/snapshots, immutable earnings ledger, reversals, provider bank recipients, withdrawals, admin Paystack transfers, audit trails and signed transfer-webhook settlement are implemented and mounted. Appointment payment integration awaits the appointment domain. The 4M worker deployment is intentionally paused while development continues.**
+**Current phase: 4N — Transactions, commission ledger, provider payouts and paid appointments. Provider-service billing and paid appointment booking/payment/refund paths are implemented. Staff appointment oversight and appointment-type administration await confirmation of the explicit admin permission boundary. The 4M worker deployment remains intentionally paused while development continues.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
@@ -15,8 +15,8 @@
 - **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; medical license was added as a required credential in this work.
 - **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
 - **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. The one-shot worker, minimal environment configuration, ten-minute Render Cron definition, one-item batch limit, tests, and deployment guide are implemented and pushed in commit `775d74a`. The user asked to pause worker hosting while development continues. No Cron service creation or successful hosted-worker run has been confirmed; because the repository push could sync an existing Render Blueprint, inspect the Render dashboard before assuming it is absent or inactive. Resume by checking/suspending any auto-synced service first, then add secrets directly in Render and verify the queued webhook. The user authorized up to $2/month, but Render does not hard-cap Cron runtime spending. Keep provider subscriptions distinct from platform subscription (4O).
-- **4N progress:** Patient/provider/admin history/detail routes for `ProviderPaymentAttempt` are mounted. The owner manages `System.platform_fee_percent` (default 15%); checkout and renewal attempts snapshot the rate; successful provider-service payments atomically post provider net and platform commission ledger entries with subscription activation; verified refunds/reversals reverse both shares and revoke access. Provider balance tracks available/reserved funds; negative available earnings are recoverable from future earnings. Provider bank methods use Paystack resolution and recipient creation; only the private recipient code, verified account name, bank and last four digits are stored. Provider payout requests use `Idempotency-Key` and reserve earnings. Admins with `manage_transactions` can approve/reject, retry conclusive failures, submit Paystack OTP directly, and reconcile. Signed Paystack transfer events settle payout state idempotently. Sensitive financial transitions are audited. See `docs/transactions-4n-api.md`, `docs/financial-4n-api.md` and the matching endpoint groups in `getTreat-api.json`.
-- **4N decisions confirmed (2026-10-14):** no ads are in scope. Provider-service subscription earnings incur a configurable platform commission (currently 15%) deducted from provider proceeds after successful payment; it is not added to the patient's amount. The setting belongs in `System`. Providers will request withdrawals and admins will process them to the provider bank using Paystack. Payment/transaction lifecycle changes and sensitive actor actions need audit trails. Appointments are intended to be paid through GetTreat and shown in transaction history. Platform subscription remains separate in 4O.
+- **4N progress:** Patient/provider/admin transaction history now combines provider-service `ProviderPaymentAttempt` and `AppointmentPaymentAttempt`. Provider appointments use provider-configured weekly availability, date exceptions, duration and consultation fee; patient booking requires an active subscription to that provider, initializes Paystack checkout with an idempotency key and commission snapshot, and becomes provider-pending only after Paystack verification. Providers can accept/decline; paid decline/cancellation/reschedule requests a full Paystack refund. Appointment net/commission shares are ledgered/reversed idempotently and audited. Provider balance tracks available/reserved funds; negative available earnings are recoverable from future earnings. Provider bank methods use Paystack resolution and recipient creation; only the private recipient code, verified account name, bank and last four digits are stored. Provider payout requests use `Idempotency-Key` and reserve earnings. Admins with `manage_transactions` can approve/reject, retry conclusive failures, submit Paystack OTP directly, and reconcile. Signed Paystack transfer events settle payout state idempotently. See `docs/appointments-4n-api.md`, `docs/transactions-4n-api.md`, `docs/financial-4n-api.md` and `getTreat-api.json`.
+- **4N decisions confirmed (2026-10-14/15):** no ads are in scope. Provider-service subscriptions and appointments incur the configurable platform commission (currently 15%) deducted from provider proceeds after successful payment; it is not added to the patient's amount. The setting belongs in `System`; each payment snapshots the rate at checkout. Providers request withdrawals and admins process them to provider banks using Paystack. Payment/transaction lifecycle changes and sensitive actor actions need audit trails. Appointment checkout is paid first; it stays pending until provider acceptance. Provider decline, cancellation and reschedule receive full refunds; rescheduling means refund old booking and make a separately paid booking. Appointment types are a separate admin-managed catalogue. Platform subscription remains separate in 4O.
 - **4N financial operations and database setup:** indexes are added by `CREATE_PROVIDER_PAYOUT_INDEXES=true npm run migrate:provider-payout-indexes`. Historical paid earnings are not automatically changed; `APPLY_PROVIDER_EARNINGS_BACKFILL=true npm run backfill:provider-earnings` snapshots the current fee for legacy successful payments and creates ledger/balance/audit records. Review the target MongoDB database and intended historical commission rate before running that backfill. Neither migration/backfill nor live Paystack transfer was run during implementation. Local tests and mocked Paystack calls pass; no live MongoDB transaction or Paystack payout has been verified. Ensure Paystack balance is funded for transfers. The 4M worker remains paused.
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
@@ -790,9 +790,49 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 6. Verify the 4N financial implementation and database setup. Apply payout indexes to
    the intended MongoDB database. Review current platform commission and legacy payment
    records before deciding whether to run the explicit historical earnings backfill.
-   Appointment payment integration follows when the appointment domain is mapped;
-   platform subscriptions remain 4O and ads are out of scope.
+   Paid appointments now have a mapped and implemented patient/provider payment slice;
+   see `docs/appointments-4n-api.md`. Admin appointment access still awaits the user's
+   permission decision. Platform subscriptions remain 4O and ads are out of scope.
 7. Ask for clarification when clinical/product requirements are ambiguous.
 8. After every completed feature, update this handoff and API JSON.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N provider-service commission ledger and Paystack payout flows are implemented; paid appointment payment and 4O platform subscription remain future work. Ads are out of scope. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N includes provider-service and appointment payments, commission ledger, Paystack refunds/payouts, and transaction history. Admin appointment management is awaiting the staff-permission decision; 4O platform subscription remains future work. Ads are out of scope. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
+
+---
+
+## 17. 4N Paid Appointment Slice — 2026-10-15
+
+The appointment flow is implemented in the current working tree:
+
+- Patient appointment type and provider availability discovery.
+- Provider weekly availability/date exceptions, IANA timezone, duration and NGN fee.
+- Patient booking requires a current active provider-service subscription to that provider.
+- Booking checkout uses Paystack, an `Idempotency-Key`, server-derived fee and a checkout-time commission snapshot.
+- Verified charge moves the appointment to `pending`; provider can accept or decline.
+- Provider decline and patient cancellation/reschedule request a full refund. A reschedule is a refunded old appointment followed by a separately paid new booking.
+- Appointment fees use the existing provider/platform ledger and appear in transaction history.
+- Signed appointment charge/refund webhooks are handled idempotently by the existing webhook path.
+- Appointment types seeded insert-only from approved design examples `Consultation` and `Nutrition Plan` with `npm run seed:appointment-types`.
+- No card data is stored. In-person appointments and reminders are not enabled.
+
+Files: `models/appointment*.model.js`, `models/provider-availability.model.js`,
+`services/appointment.service.js`, `controllers/appointment.controller.js`,
+`routes/appointment*.routes.js`, `validators/appointment.validator.js`,
+`docs/appointments-4n-api.md`, `tests/appointment.4n.test.js`.
+
+The admin/super-admin Figma includes appointment oversight, cancellation and
+rescheduling. The user was asked which explicit permission should gate staff operations
+(`manage_appointments` versus existing permission domains); do not add staff routes or
+permission keys until they answer. Appointment-type management endpoints also await that
+decision. The user's response for admin appointment permissions is still pending.
+
+The user previously deferred Render worker deployment while developing. Appointment
+charge/refund webhooks are processed inline in the existing signed webhook path; the
+worker is not required for this appointment slice. Provider-service billing webhook
+queue/renewal automation remains deferred. 24-hour reminders require a future
+notification worker. Do not enable/deploy a worker without the user's explicit resume
+request.
+
+Automated tests run during implementation: `npm test` — 69 passed, 0 failed. No live
+MongoDB, Render, Paystack checkout/refund, or Postman call was performed. Repeat the
+suite after the pending admin authorization boundary is implemented.

@@ -11,6 +11,8 @@
     "seed:system": "node scripts/seed-system.js",
     "seed:services": "node scripts/seed-services.js",
     "seed:health-conditions": "node scripts/seed-health-conditions.js",
+    "seed:appointment-types": "node scripts/seed-appointment-types.js",
+    "migrate:appointment-indexes": "node scripts/migrate-appointment-indexes.js",
     "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js",
     "worker:provider-billing": "node scripts/run-provider-billing-worker.js",
     "migrate:provider-billing-indexes": "node scripts/migrate-provider-billing-indexes.js",

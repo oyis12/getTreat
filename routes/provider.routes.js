@@ -28,6 +28,7 @@ import {
 } from "../validators/provider.validator.js";
 import providerTransactionRoutes from "./provider-transaction.routes.js";
 import providerPayoutRoutes from "./provider-payout.routes.js";
+import providerAppointmentRoutes from "./provider-appointment.routes.js";
 
 const router = express.Router();
 
@@ -35,6 +36,7 @@ router.use(protect, providerOnly);
 
 router.get("/me/profile", getMyProviderProfile);
 router.use("/me/transactions", providerTransactionRoutes);
+router.use("/me", providerAppointmentRoutes);
 router.use("/me", providerPayoutRoutes);
 router.put("/me/profile", uploadProviderRegistrationFiles, validateProviderProfilePayload, submitMyProviderProfile);
 router.get("/me/services", getMyProviderServices);

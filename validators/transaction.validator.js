@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import AppError from "../utils/AppError.js";
 
-const allowedStatuses = new Set(["all", "initializing", "pending", "success", "failed", "reversed", "refunded"]);
-const allowedPurposes = new Set(["all", "initial", "renewal"]);
+const allowedStatuses = new Set(["all", "initializing", "pending", "success", "failed", "refund_pending", "refund_failed", "reversed", "refunded"]);
+const allowedPurposes = new Set(["all", "initial", "renewal", "appointment"]);
 const allowedSorts = new Set(["newest", "oldest", "highest", "lowest"]);
 const allowedQueryKeys = new Set(["page", "limit", "status", "purpose", "sort", "search"]);
 
@@ -15,7 +15,7 @@ export const validateTransactionListQuery = (req, _res, next) => {
     if (typeof page !== "string" || !/^\d+$/.test(page) || Number(page) < 1) throw new AppError("page must be a positive integer", 400);
     if (typeof limit !== "string" || !/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100) throw new AppError("limit must be an integer from 1 to 100", 400);
     if (typeof status !== "string" || !allowedStatuses.has(status)) throw new AppError("status is not a supported transaction state", 400);
-    if (typeof purpose !== "string" || !allowedPurposes.has(purpose)) throw new AppError("purpose must be all, initial, or renewal", 400);
+    if (typeof purpose !== "string" || !allowedPurposes.has(purpose)) throw new AppError("purpose must be all, initial, renewal, or appointment", 400);
     if (typeof sort !== "string" || !allowedSorts.has(sort)) throw new AppError("sort must be newest, oldest, highest, or lowest", 400);
     if (typeof search !== "string" || search.length > 100) throw new AppError("search must be text with at most 100 characters", 400);
 

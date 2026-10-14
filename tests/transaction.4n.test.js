@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import PatientProfile from "../models/patient-profile.model.js";
 import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
+import AppointmentPaymentAttempt from "../models/appointment-payment-attempt.model.js";
 import AdminProfile from "../models/admin-profile.model.js";
 import { requireAdminPermission } from "../middlewares/admin-permission.middleware.js";
 import {
@@ -108,6 +109,15 @@ test("patient transaction listing is scoped to their resolved profile and pagina
     return queryChain([]);
   });
   t.mock.method(ProviderPaymentAttempt, "countDocuments", async () => 0);
+  t.mock.method(AppointmentPaymentAttempt, "find", () => queryChain([{
+    _id: transactionId, reference: "gt4a-reference", status: "success", amount_kobo: 150000,
+    commission_rate_percent: 15, platform_fee_kobo: 22500, provider_net_kobo: 127500, currency: "NGN",
+    createdAt: new Date("2026-10-15T10:00:00Z"), verified_at: new Date("2026-10-15T10:01:00Z"),
+    provider_profile: { _id: providerProfileId, user: { fullname: "Doctor Doe" } },
+    patient_profile: { _id: patientProfileId, user: { fullname: "Patient Jane" } },
+    appointment: { _id: "507f1f77bcf86cd799439019", appointment_type_snapshot: { name: "Consultation" }, starts_at: new Date("2026-11-01T10:00:00Z"), status: "pending" },
+  }]));
+  t.mock.method(AppointmentPaymentAttempt, "countDocuments", async () => 1);
 
   const result = await listPatientTransactions(patientUserId, {
     page: 2, limit: 10, status: "pending", purpose: "renewal", sort: "oldest", search: "gt4m",
@@ -125,25 +135,54 @@ test("provider transaction detail query enforces provider ownership", async (t) 
     attemptFilter = filter;
     return queryChain(null);
   });
+  t.mock.method(AppointmentPaymentAttempt, "findOne", () => queryChain(null));
 
   await assert.rejects(getProviderTransaction("507f1f77bcf86cd799439017", transactionId), { statusCode: 404 });
   assert.equal(attemptFilter.provider_profile, providerProfileId);
   assert.equal(attemptFilter._id, transactionId);
 });
 
-test("admin transaction listing is platform-wide but returns an empty page consistently", async (t) => {
+test("admin transaction listing merges appointment transactions with provider-service history", async (t) => {
   let attemptFilter;
   t.mock.method(ProviderPaymentAttempt, "find", (filter) => {
     attemptFilter = filter;
     return queryChain([]);
   });
   t.mock.method(ProviderPaymentAttempt, "countDocuments", async () => 0);
+  t.mock.method(AppointmentPaymentAttempt, "find", () => queryChain([{
+    _id: transactionId, reference: "gt4a-reference", status: "success", amount_kobo: 150000,
+    commission_rate_percent: 15, platform_fee_kobo: 22500, provider_net_kobo: 127500, currency: "NGN",
+    createdAt: new Date("2026-10-15T10:00:00Z"), verified_at: new Date("2026-10-15T10:01:00Z"),
+    provider_profile: { _id: providerProfileId, user: { fullname: "Doctor Doe" } },
+    patient_profile: { _id: patientProfileId, user: { fullname: "Patient Jane" } },
+    appointment: { _id: "507f1f77bcf86cd799439019", appointment_type_snapshot: { name: "Consultation" }, starts_at: new Date("2026-11-01T10:00:00Z"), status: "pending" },
+  }]));
+  t.mock.method(AppointmentPaymentAttempt, "countDocuments", async () => 1);
 
   const result = await listAdminTransactions({
     page: 1, limit: 20, status: "all", purpose: "all", sort: "newest", search: "",
   });
   assert.deepEqual(attemptFilter, {});
-  assert.deepEqual(result, { items: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+  assert.equal(result.pagination.total, 1);
+  assert.equal(result.items[0].purpose, "appointment");
+  assert.equal(result.items[0].appointment.type, "Consultation");
+});
+
+test("appointment transaction serialization exposes appointment and commission fields safely", () => {
+  const row = serializeTransactionAttempt({
+    _id: transactionId, reference: "gt4a-reference", status: "success", purpose: "appointment",
+    amount_kobo: 150000, commission_rate_percent: 15, platform_fee_kobo: 22500, provider_net_kobo: 127500,
+    currency: "NGN", createdAt: new Date("2026-10-15T10:00:00Z"), verified_at: new Date("2026-10-15T10:01:00Z"),
+    provider_profile: { _id: providerProfileId, user: { fullname: "Doctor Doe" } },
+    patient_profile: { _id: patientProfileId, user: { fullname: "Patient Jane" } },
+    appointment: { _id: "507f1f77bcf86cd799439019", appointment_type_snapshot: { name: "Consultation" }, starts_at: new Date("2026-11-01T10:00:00Z"), status: "pending" },
+  }, "admin");
+  assert.equal(row.purpose, "appointment");
+  assert.equal(row.appointment.type, "Consultation");
+  assert.equal(row.provider_net, 1275);
+  assert.equal(row.patient.fullname, "Patient Jane");
+  assert.equal(row.provider.fullname, "Doctor Doe");
+  assert.equal(row.provider_service, null);
 });
 
 test("admin transaction access requires manage_transactions while super admin bypasses it", async (t) => {

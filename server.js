@@ -27,6 +27,8 @@ import patientProviderInstructionRoutes from "./routes/patient-provider-instruct
 import providerDiscoveryRoutes from "./routes/provider-discovery.routes.js";
 import superAdminRoutes from "./routes/super-admin.routes.js";
 import providerSubscriptionRoutes, { paystackWebhookRouter } from "./routes/provider-subscription.routes.js";
+import appointmentRoutes from "./routes/appointment.routes.js";
+import appointmentDiscoveryRoutes from "./routes/appointment-discovery.routes.js";
 
 
 
@@ -86,6 +88,8 @@ app.use("/api/admin/transactions", adminTransactionRoutes);
 app.use("/api/admin/payouts", adminPayoutRoutes);
 app.use("/api/super-admin", superAdminRoutes);
 app.use("/api/user/me/provider-subscriptions", providerSubscriptionRoutes);
+app.use("/api/user/me/appointments", appointmentRoutes);
+app.use("/api/appointments", appointmentDiscoveryRoutes);
 app.use("/api/payments", paystackWebhookRouter);
 app.use("/api/user/babies", babyProgressRoutes);
 app.use("/api/user/babies", babyRoutes);

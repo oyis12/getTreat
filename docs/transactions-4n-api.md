@@ -3,8 +3,9 @@
 ## Scope and design mapping
 
 The 4N transaction slice exposes history/details for provider-service subscription
-payment attempts that already exist in `ProviderPaymentAttempt`, plus commission
-snapshots, ledger posting/reversals, provider earnings and Paystack payout processing. It covers
+attempts in `ProviderPaymentAttempt` and appointment attempts in
+`AppointmentPaymentAttempt`, plus commission snapshots, ledger posting/reversals,
+provider earnings and Paystack payout processing. It covers
 the transaction history/detail views for patients, providers, and admins using the
 screens in:
 
@@ -21,17 +22,18 @@ screens in:
 - `designs/super admin/patients/Admin- patients(Transaction details).png`
 - `designs/super admin/providers/Admin- view provider (Transaction).png`
 
-The business record remains `ProviderPaymentAttempt`; its `ProviderSubscription`,
-`ProviderProfile`, and `PatientProfile` relationships supply the service and actor
-context. No separate transaction collection is added. The authenticated patient sees
-their own attempts, a provider sees attempts tied to their own provider profile, and an
-admin with `manage_transactions` or a super admin sees platform-wide attempts.
+The two transaction records keep their separate business lifecycles and appear together
+in transaction history. Their provider, patient and subscription/appointment references
+supply the relevant actor context. The authenticated patient sees their own attempts, a
+provider sees attempts tied to their own provider profile, and an admin with
+`manage_transactions` or a super admin sees platform-wide attempts.
 
 The transaction history endpoints remain read-only. Verified payment/webhook handling
 posts commission and provider earnings to the ledger; confirmed refunds/reversals reverse
-both ledger shares. Payout operations are documented in
+both ledger shares. Appointment booking is documented in
+[`appointments-4n-api.md`](appointments-4n-api.md). Payout operations are documented in
 [`financial-4n-api.md`](financial-4n-api.md). Platform-subscription records (phase 4O),
-appointment records/payments, receipts, and summary analytics are not implemented here.
+platform-subscription records (phase 4O), receipts, and summary analytics are not implemented here.
 Ads are not part of the product scope.
 
 ## Routes
@@ -40,9 +42,9 @@ All routes are read-only and require `Authorization: Bearer <access_token>`.
 
 | Method | Route | Actor and access |
 | --- | --- | --- |
-| `GET` | `/api/user/me/transactions` | Patient's own provider-service subscription payment attempts |
+| `GET` | `/api/user/me/transactions` | Patient's own provider-service and appointment payment attempts |
 | `GET` | `/api/user/me/transactions/:transactionId` | One attempt owned by the patient |
-| `GET` | `/api/provider/me/transactions` | Provider's own service subscription payment attempts |
+| `GET` | `/api/provider/me/transactions` | Provider's own service subscription and appointment payment attempts |
 | `GET` | `/api/provider/me/transactions/:transactionId` | One attempt tied to the provider's profile |
 | `GET` | `/api/admin/transactions` | Admin with `manage_transactions`; super admin allowed |
 | `GET` | `/api/admin/transactions/:transactionId` | Same admin authorization |
@@ -58,8 +60,8 @@ by `requireAdminPermission("manage_transactions")`; super admins bypass admin sc
 
 - `page`: positive integer, default `1`.
 - `limit`: integer `1..100`, default `20`.
-- `status`: `all`, `initializing`, `pending`, `success`, `failed`, `reversed`, or `refunded`; default `all`.
-- `purpose`: `all`, `initial`, or `renewal`; default `all`.
+- `status`: `all`, `initializing`, `pending`, `success`, `failed`, `refund_pending`, `refund_failed`, `reversed`, or `refunded`; default `all`.
+- `purpose`: `all`, `initial`, `renewal`, or `appointment`; default `all`.
 - `sort`: `newest`, `oldest`, `highest`, or `lowest`; default `newest`.
 - `search`: optional text up to 100 characters; searches the provider transaction reference and Paystack transaction ID.
 

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import PatientProfile from "../models/patient-profile.model.js";
 import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
+import AppointmentPaymentAttempt from "../models/appointment-payment-attempt.model.js";
 import AuditLog from "../models/audit-log.model.js";
 import AppError from "../utils/AppError.js";
 
@@ -65,6 +66,17 @@ export const serializeTransactionAttempt = (attempt, audience) => {
     provider_subscription_id: idOf(subscription),
   };
 
+  if (attempt.purpose === "appointment") {
+    result.provider_service = null;
+    result.provider_subscription_id = null;
+    result.appointment = attempt.appointment ? {
+      id: idOf(attempt.appointment._id),
+      type: attempt.appointment.appointment_type_snapshot?.name ?? null,
+      starts_at: attempt.appointment.starts_at ?? null,
+      status: attempt.appointment.status ?? null,
+    } : null;
+  }
+
   if (audience === "provider" || audience === "admin") {
     result.commission_rate_percent = attempt.commission_rate_percent ?? 0;
     result.platform_fee_minor = attempt.platform_fee_kobo ?? 0;
@@ -90,16 +102,40 @@ export const serializeTransactionAttempt = (attempt, audience) => {
 };
 
 const paginateTransactions = async (scope, filters, audience) => {
+  const includeProviderPayments = filters.purpose !== "appointment";
+  const includeAppointments = filters.purpose === "all" || filters.purpose === "appointment";
   const filter = buildTransactionFilter(scope, filters);
-  const [documents, total] = await Promise.all([
-    populateTransaction(
-      ProviderPaymentAttempt.find(filter)
-        .sort(transactionSort[filters.sort])
-        .skip((filters.page - 1) * filters.limit)
-        .limit(filters.limit)
-    ).lean(),
-    ProviderPaymentAttempt.countDocuments(filter),
+  const appointmentFilter = {
+    ...(scope.patient_profile ? { patient_profile: scope.patient_profile } : {}),
+    ...(scope.provider_profile ? { provider_profile: scope.provider_profile } : {}),
+    ...(filters.status !== "all" ? { status: filters.status } : {}),
+    ...(filters.search ? { $or: [
+      { reference: new RegExp(escapeRegex(filters.search), "i") },
+      { gateway_transaction_id: new RegExp(escapeRegex(filters.search), "i") },
+    ] } : {}),
+  };
+  const [providerDocuments, providerTotal, appointmentDocuments, appointmentTotal] = await Promise.all([
+    includeProviderPayments ? populateTransaction(ProviderPaymentAttempt.find(filter).sort(transactionSort[filters.sort]).limit(filters.page * filters.limit)).lean() : [],
+    includeProviderPayments ? ProviderPaymentAttempt.countDocuments(filter) : 0,
+    includeAppointments ? AppointmentPaymentAttempt.find(appointmentFilter)
+      .sort(transactionSort[filters.sort])
+      .limit(filters.page * filters.limit)
+      .populate({ path: "appointment", select: "appointment_type_snapshot starts_at ends_at status" })
+      .populate({ path: "provider_profile", select: "user", populate: { path: "user", select: "fullname" } })
+      .populate({ path: "patient_profile", select: "user", populate: { path: "user", select: "fullname" } })
+      .lean() : [],
+    includeAppointments ? AppointmentPaymentAttempt.countDocuments(appointmentFilter) : 0,
   ]);
+  const allDocuments = [
+    ...providerDocuments,
+    ...appointmentDocuments.map((document) => ({ ...document, purpose: "appointment" })),
+  ].sort((a, b) => {
+    if (filters.sort === "highest" || filters.sort === "lowest") return (a.amount_kobo - b.amount_kobo) * (filters.sort === "highest" ? -1 : 1);
+    const direction = filters.sort === "oldest" ? 1 : -1;
+    return (new Date(a.createdAt) - new Date(b.createdAt)) * direction;
+  });
+  const total = providerTotal + appointmentTotal;
+  const documents = allDocuments.slice((filters.page - 1) * filters.limit, filters.page * filters.limit);
   return {
     items: documents.map((document) => serializeTransactionAttempt(document, audience)),
     pagination: {
@@ -113,12 +149,30 @@ const paginateTransactions = async (scope, filters, audience) => {
 
 const findTransaction = async (scope, transactionId, audience) => {
   if (!mongoose.isValidObjectId(transactionId)) throw new AppError("Invalid transaction ID", 400);
-  const document = await populateTransaction(
-    ProviderPaymentAttempt.findOne({ ...scope, _id: transactionId })
-  ).lean();
+  let document = await populateTransaction(ProviderPaymentAttempt.findOne({ ...scope, _id: transactionId })).lean();
+  let resourceType = "provider_payment_attempt";
+  if (!document) {
+    document = await AppointmentPaymentAttempt.findOne({
+      _id: transactionId,
+      ...(scope.patient_profile ? { patient_profile: scope.patient_profile } : {}),
+      ...(scope.provider_profile ? { provider_profile: scope.provider_profile } : {}),
+    })
+      .populate({ path: "appointment", select: "appointment_type_snapshot starts_at ends_at status" })
+      .populate({ path: "provider_profile", select: "user", populate: { path: "user", select: "fullname" } })
+      .populate({ path: "patient_profile", select: "user", populate: { path: "user", select: "fullname" } })
+      .lean();
+    resourceType = "appointment_payment_attempt";
+    if (document) document.purpose = "appointment";
+  }
   if (!document) throw new AppError("Transaction not found", 404);
   const transaction = serializeTransactionAttempt(document, audience);
-  const auditEvents = await AuditLog.find({ resource_type: "provider_payment_attempt", resource_id: document._id })
+  const auditFilter = resourceType === "appointment_payment_attempt"
+    ? { $or: [
+      { resource_type: "appointment_payment_attempt", resource_id: document._id },
+      ...(document.appointment?._id ? [{ resource_type: "appointment", resource_id: document.appointment._id }] : []),
+    ] }
+    : { resource_type: resourceType, resource_id: document._id };
+  const auditEvents = await AuditLog.find(auditFilter)
     .sort({ createdAt: 1 })
     .select("action prior_state new_state createdAt actor_role")
     .lean();

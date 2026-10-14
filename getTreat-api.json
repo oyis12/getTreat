@@ -1,9 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-  "version": "2026-10-14-4N",
+  "version": "2026-10-15-4N-appointments",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service billing, commission ledger, provider payouts, Paystack transfers, and transaction history.",
+    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service billing, paid appointments, commission ledger, provider payouts, Paystack transfers, and transaction history.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -46,6 +46,7 @@
       "Super Admin account management and admin authentication",
       "4M patient-to-provider-service subscriptions and Paystack payment lifecycle",
       "4N transaction history, commission ledger and provider payouts",
+      "4N paid provider appointments, availability and appointment refunds",
       "4O platform subscription"
     ],
     "route_mounts": {
@@ -69,6 +70,9 @@
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/appointments": "appointment-discovery.routes.js",
+      "/api/user/me/appointments": "appointment.routes.js",
+      "/api/provider/me/appointments and availability": "provider-appointment.routes.js via provider.routes.js",
       "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
       "/api/user (vitals)": "vitals.routes.js via user.routes.js",
       "/api/user/babies": "baby-progress.routes.js and baby.routes.js",
@@ -76,7 +80,7 @@
     },
     "source_verification": {
       "verified_from": ["server.js", "routes/*.routes.js", "controllers", "services", "validators", "models"],
-      "verified_at": "2026-10-14",
+      "verified_at": "2026-10-15",
       "note": "Mounted endpoint paths were checked against the current working tree."
     },
     "route_mounts_verified_from_server_js": {
@@ -100,13 +104,16 @@
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/appointments": "appointment-discovery.routes.js",
+      "/api/user/me/appointments": "appointment.routes.js",
+      "/api/provider/me/appointments and availability": "provider-appointment.routes.js via provider.routes.js",
       "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
       "/api/user (vitals)": "vitals.routes.js via user.routes.js",
       "/api/user/babies": "baby-progress.routes.js and baby.routes.js",
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
-    "important_latest_codebase_note": "4N provider-service transaction history, owner-configurable commission snapshots, provider/platform ledger posting and reversals, provider earnings/bank payout methods, admin Paystack transfer review, transfer webhook settlement, and audit timelines are implemented and mounted; see docs/financial-4n-api.md and docs/transactions-4n-api.md. Commission defaults to 15%, is snapshotted at checkout and deducted only after successful payment. Provider transfers require funded Paystack balance. Appointment payment integration awaits the appointment domain, and platform subscriptions remain separate in 4O. Ads are out of scope. The provider billing worker hosting remains paused; check Render for possible Blueprint auto-sync before assuming it is absent. Do not run the historical earnings backfill until the target database and applied rate are reviewed.",
+    "important_latest_codebase_note": "4N includes paid provider appointments with patient/provider APIs, provider availability, Paystack checkout and verification, commission snapshots, ledger credits/reversals, and transaction history; see docs/appointments-4n-api.md, docs/financial-4n-api.md, and docs/transactions-4n-api.md. Appointment types seed from the approved designs. Provider and platform shares are posted only after verified payment, and paid cancellations/provider declines request a full Paystack refund. Admin appointment review/type-management routes await confirmation of the staff permission boundary. The billing worker deployment remains paused; automatic queued webhook processing and 24-hour reminders require resuming a worker. Platform subscriptions remain separate in 4O. Ads are out of scope. Do not run the historical earnings backfill until the target database and applied rate are reviewed.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -132,7 +139,7 @@
         "feature": "Provider earnings, payout methods and admin withdrawal processing",
         "actors": ["provider", "admin", "super_admin"],
         "authorization": "Super admin manages commission settings; provider accesses only its own balance, payout methods and payout requests; admin requires manage_transactions; super_admin bypasses admin permission checks.",
-        "rules": ["Commission defaults to 15% and is snapshotted at provider-service checkout initialization.", "Commission is deducted from provider earnings only after payment success.", "Raw bank account digits and OTPs are not stored.", "Payout amount comes from available provider balance and uses provider-scoped Idempotency-Key.", "Signed Paystack transfer webhooks settle payout state idempotently.", "Appointment earnings await the appointment payment domain; platform subscriptions remain in 4O."]
+        "rules": ["Commission defaults to 15% and is snapshotted at provider-service or appointment checkout initialization.", "Commission is deducted from provider earnings only after payment success.", "Raw bank account digits and OTPs are not stored.", "Payout amount comes from available provider balance and uses provider-scoped Idempotency-Key.", "Signed Paystack transfer webhooks settle payout state idempotently.", "Appointment earnings use the same provider/platform commission ledger; platform subscriptions remain in 4O."]
       },
       "endpoints": [
         {"method":"GET","path":"/api/super-admin/platform-financial-settings","summary":"Read platform fee percentage","availability":"mounted","auth":"bearer","roles":["super_admin"],"response":{"status":200,"data":{"platform_fee_percent":15}}},
@@ -156,6 +163,33 @@
         {"method":"POST","path":"/api/admin/payouts/:payoutId/reconcile-transfer","summary":"Verify transfer status directly with Paystack","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"]}
       ],
       "webhook": {"method":"POST","path":"/api/payments/paystack/webhook","events":["transfer.success","transfer.failed","transfer.reversed"],"availability":"mounted","auth":"x-paystack-signature HMAC-SHA512","description":"Uses the existing Paystack webhook endpoint; transfer events are amount/currency/reference matched and settled idempotently."}
+    },
+    {
+      "name": "4N Paid Provider Appointments",
+      "base_path": "/api/appointments, /api/user/me/appointments, /api/provider/me",
+      "description": "Provider-managed digital appointment availability, patient paid booking, provider accept/decline, full Paystack refunds, and appointment ledger transactions.",
+      "availability": "mounted",
+      "documentation": "docs/appointments-4n-api.md",
+      "design_mapping": {
+        "feature": "Patient booking and appointment history, provider availability and appointment decisions",
+        "actors": ["patient", "provider", "admin", "super_admin"],
+        "authorization": "Patients act only on their own appointments; providers act only on appointments tied to their approved provider profile. Admin appointment access is pending permission confirmation.",
+        "rules": ["Patient requires an active provider-service subscription for that provider before booking.", "Patient pays through Paystack before an appointment becomes pending for provider review.", "Only provider availability, duration and fee set the payable amount.", "The appointment type is selected from the active appointment-type catalogue.", "Commission is snapshotted at checkout and posted to the ledger only after Paystack verification.", "Provider decline and paid cancellation/reschedule request full refund; refund webhook reverses both ledger shares.", "In-person appointments are not enabled; approved designs mark them coming soon.", "No card data is stored by GetTreat."]
+      },
+      "endpoints": [
+        {"method":"GET","path":"/api/appointments/types","summary":"List active appointment types","availability":"mounted","auth":"public","response":{"status":200,"data":"APPOINTMENT_TYPES"}},
+        {"method":"GET","path":"/api/appointments/providers/:providerProfileId/availability","summary":"Get approved provider public availability, fee and duration","availability":"mounted","auth":"public","request":{"path_params":{"providerProfileId":"PROVIDER_PROFILE_ID"}},"response":{"status":200,"data":"PROVIDER_AVAILABILITY_OR_NULL"}},
+        {"method":"GET","path":"/api/provider/me/availability","summary":"Get own provider appointment availability","availability":"mounted","auth":"bearer","roles":["provider"]},
+        {"method":"PUT","path":"/api/provider/me/availability","summary":"Set weekly appointment hours, date exceptions, duration and fee","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"timezone":"Africa/Lagos","duration_minutes":30,"fee_amount":1500,"weekly_schedule":[{"weekday":1,"windows":[{"start":"09:00","end":"12:00"}]}],"exceptions":[]}}},
+        {"method":"GET","path":"/api/user/me/appointments","summary":"List own appointments","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"query_params":{"page":1,"limit":20,"filter":"all|upcoming|recently_booked|completed|missed"}},"response":{"status":200,"data":"PAGINATED_APPOINTMENTS"}},
+        {"method":"POST","path":"/api/user/me/appointments","summary":"Initialize idempotent Paystack checkout for provider appointment","availability":"mounted","auth":"bearer","roles":["patient"],"headers":{"Idempotency-Key":"appointment-unique-attempt-token"},"request":{"body":{"provider_profile_id":"PROVIDER_PROFILE_ID","appointment_type_id":"APPOINTMENT_TYPE_ID","starts_at":"2026-11-09T10:00:00.000Z","digital_option":"video_call","reason":"Optional reason, at most 1000 chars"}},"response":{"status":201,"data":"APPOINTMENT_WITH_PAYSTACK_CHECKOUT_URL"}},
+        {"method":"POST","path":"/api/user/me/appointments/:appointmentId/verify-payment","summary":"Verify appointment payment directly with Paystack","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"reference":"PAYSTACK_REFERENCE"}},"response":{"status":200,"data":{"payment_status":"success|pending|failed","appointment":"APPOINTMENT"}}},
+        {"method":"POST","path":"/api/user/me/appointments/:appointmentId/cancel","summary":"Cancel/reschedule a paid appointment and request full refund","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"reason":"patient_cancelled|rescheduled"}},"response":{"status":200,"data":{"refund":{"status":"refund_pending","refund_reference":"PAYSTACK_REFUND_REFERENCE"}}}},
+        {"method":"GET","path":"/api/provider/me/appointments","summary":"List appointments for the authenticated provider","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"query_params":{"page":1,"limit":20,"filter":"all|upcoming|recently_booked|completed|missed"}}},
+        {"method":"PATCH","path":"/api/provider/me/appointments/:appointmentId/decision","summary":"Accept appointment or decline it and request a full refund","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"decision":"accept|decline","reason":"Optional reason"}}}
+      ],
+      "webhook": {"method":"POST","path":"/api/payments/paystack/webhook","events":["charge.success","refund.processed","refund.failed","charge.dispute.create"],"availability":"mounted","auth":"x-paystack-signature HMAC-SHA512","description":"Appointment charge success and refund/reversal events are verified and settled idempotently. Provider-service events remain in the existing queue."},
+      "deferred_design_items": ["staff appointment management after permission is confirmed", "24-hour reminder scheduling while worker hosting remains paused", "appointment type management endpoints pending staff permission decision", "receipt generation"]
     },
     {
       "name": "Authentication",
@@ -2135,7 +2169,7 @@
           "notes": ["Reject invalid signatures.", "Deduplicate event/transaction processing.", "Verify reference, amount, currency and purchase metadata before granting or renewing access."]
         }
       ],
-      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "4N patient/provider/admin endpoints list provider-service subscription attempts and expose commission snapshots to provider/admin. Commission and provider earnings are ledgered; provider bank payout requests and admin Paystack transfers are documented in docs/financial-4n-api.md. Platform subscriptions and appointments remain deferred.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
+      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "4N patient/provider/admin transaction history includes provider-service and appointment attempts. Appointment booking/payment/refund is documented in docs/appointments-4n-api.md; provider bank payout requests and admin Paystack transfers are documented in docs/financial-4n-api.md. Platform subscriptions remain in 4O.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
     },
     {
       "name": "4N Provider-Service Subscription Transaction History",
@@ -2151,15 +2185,15 @@
         "rules": ["Payment-attempt status is distinct from subscription entitlement status.", "Only currently persisted payment fields are returned; billing email, idempotency keys, access codes, authorization data and internal failure messages remain private.", "No payment state is changed by a history/detail read.", "Provider/admin views include the commission snapshot and provider net; patient views show the gross charge.", "Successful provider payments post provider and platform ledger entries; refund/reversal events reverse both shares."]
       },
       "endpoints": [
-        {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service and appointment payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/user/me/transactions/:transactionId", "summary": "Get one provider-service payment attempt owned by the authenticated patient", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PROVIDER"}},
-        {"method": "GET", "path": "/api/provider/me/transactions", "summary": "List provider-service payment attempts for the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/provider/me/transactions", "summary": "List provider-service and appointment payment attempts for the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/provider/me/transactions/:transactionId", "summary": "Get one payment attempt tied to the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT"}},
-        {"method": "GET", "path": "/api/admin/transactions", "summary": "List platform provider-service payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/admin/transactions", "summary": "List platform provider-service and appointment payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/admin/transactions/:transactionId", "summary": "Get one platform provider-service payment attempt", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT_AND_PROVIDER"}}
       ],
       "documentation": "docs/transactions-4n-api.md",
-      "deferred_design_items": ["4O platform subscription transactions", "appointments and their payment records", "receipt generation"],
+      "deferred_design_items": ["4O platform subscription transactions", "receipt generation"],
       "confirmed_product_direction": ["Ads are out of scope", "Platform subscription remains separate from provider-service subscriptions in 4O", "Owner-configurable commission currently targets 15 percent and is deducted from successful provider-service subscription and appointment earnings rather than added to patient charges", "Each checkout snapshots the commission rate at initialization", "Providers request withdrawals and admins process them to provider bank accounts using Paystack", "Payment lifecycle changes and sensitive actor actions require audit trails", "Appointments should be paid through GetTreat and represented in transaction history", "Refunds/reversals reverse provider and platform ledger shares; provider amounts already paid are recoverable against future earnings"],
       "payout_contract": "Implemented and mounted; see docs/financial-4n-api.md. Provider bank accounts are verified through Paystack, stored as recipient code plus masked account details, and support multiple methods with one default. Payout requests use provider-scoped Idempotency-Key, reserve available balance, and require manage_transactions for admin processing. Transfer status is reconciled from signed Paystack webhooks; OTP is never stored.",
       "open_product_decisions": []

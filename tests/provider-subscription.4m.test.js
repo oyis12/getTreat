@@ -9,6 +9,7 @@ import ProviderSubscription from "../models/provider-subscription.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
 import {
   addBillingCycle,
+  getPaystackEventReference,
   getProviderRenewalRetryAt,
 } from "../services/provider-subscription.service.js";
 import { verifyPaystackWebhookSignature } from "../services/paystack.service.js";
@@ -97,6 +98,12 @@ test("purchase validator accepts only the service id, consent, and an idempotenc
     body: { provider_service_id: req.body.provider_service_id, amount: 1 },
   }), /Unknown provider subscription field/);
   await assert.rejects(runMiddleware(validateAutoRenew, { body: { enabled: "true" } }), /enabled must be a boolean/);
+});
+
+test("Paystack refund events map transaction_reference to the original checkout", () => {
+  assert.equal(getPaystackEventReference({ event: "refund.processed", data: { transaction_reference: "gt4a-original" } }), "gt4a-original");
+  assert.equal(getPaystackEventReference({ event: "charge.success", data: { reference: "gt4m-provider-service" } }), "gt4m-provider-service");
+  assert.equal(getPaystackEventReference({ event: "charge.success", data: { transaction: { reference: "gt4a-nested" } } }), "gt4a-nested");
 });
 
 test("Paystack webhook signature validation checks the raw payload bytes", () => {
