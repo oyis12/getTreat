@@ -4,7 +4,9 @@ const { Schema } = mongoose;
 
 const providerPayoutMethodSchema = new Schema({
   provider_profile: { type: Schema.Types.ObjectId, ref: "ProviderProfile", required: true, index: true },
-  recipient_code: { type: String, required: true, index: true, select: false },
+  // Paystack recipient codes uniquely identify the transfer destination. Keep this
+  // declaration aligned with databases where recipient_code_1 already exists unique.
+  recipient_code: { type: String, required: true, unique: true, select: false },
   bank_code: { type: String, required: true, maxlength: 20 },
   bank_name: { type: String, required: true, maxlength: 120 },
   account_name: { type: String, required: true, maxlength: 160 },

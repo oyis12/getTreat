@@ -57,6 +57,8 @@ test("payment attempts snapshot commission and the ledger is idempotency-keyed",
 
 test("payout models retain recipient codes privately and enforce provider-scoped idempotency", () => {
   assert.equal(ProviderPayoutMethod.schema.path("recipient_code").options.select, false);
+  const recipientCodeIndex = ProviderPayoutMethod.schema.indexes().find(([keys]) => keys.recipient_code === 1);
+  assert.equal(recipientCodeIndex?.[1]?.unique, true);
   assert.equal(ProviderPayoutMethod.schema.path("account_number"), undefined);
   const payout = new ProviderPayout({
     provider_profile: new mongoose.Types.ObjectId(), payout_method: new mongoose.Types.ObjectId(),
