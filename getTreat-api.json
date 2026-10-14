@@ -102,7 +102,7 @@
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
-    "important_latest_codebase_note": "4N read-only transaction history/details are implemented for current provider-service subscription payment attempts only. Platform subscriptions (4O), appointments, ads, wallet, withdrawals, provider earnings/payouts, fees, refunds and receipts are not implemented. 4M worker code/config remains prepared but hosted deployment is intentionally paused; check Render for possible Blueprint auto-sync before assuming it is absent.",
+    "important_latest_codebase_note": "4N read-only transaction history/details are implemented for current provider-service subscription payment attempts only. Confirmed future direction: configurable platform commission (currently 15%) is deducted from successful provider-service and appointment earnings, providers request withdrawals for admin Paystack processing, transaction state and sensitive actions are audited, and appointments are intended to be paid through GetTreat. Each checkout snapshots the configured commission rate; a refund/reversal reverses both provider and platform ledger shares, with an already-paid provider share recorded as recoverable against future earnings. Provider bank-account setup and Paystack transfer approval/retry/failure details remain open. Platform subscriptions remain separate in 4O. Ads are out of scope. 4M worker code/config remains prepared but hosted deployment is intentionally paused; check Render for possible Blueprint auto-sync before assuming it is absent.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -2120,7 +2120,9 @@
         {"method": "GET", "path": "/api/admin/transactions/:transactionId", "summary": "Get one platform provider-service payment attempt", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT_AND_PROVIDER"}}
       ],
       "documentation": "docs/transactions-4n-api.md",
-      "deferred_design_items": ["4O platform subscription transactions", "appointments", "ads", "wallet/deposits", "withdrawals and payouts", "platform fee/commission", "refund actions", "payment method and bank data", "receipt generation", "earnings summaries"]
+      "deferred_design_items": ["4O platform subscription transactions", "appointments and their payment records", "provider balance and withdrawal/payout records", "platform commission ledger and refunds/reversals", "payment method and bank data", "receipt generation", "earnings summaries"],
+      "confirmed_product_direction": ["Ads are out of scope", "Platform subscription remains separate from provider-service subscriptions in 4O", "Owner-configurable commission currently targets 15 percent and is deducted from successful provider-service subscription and appointment earnings rather than added to patient charges", "Each checkout snapshots the commission rate at initialization", "Providers request withdrawals and admins process them to provider bank accounts using Paystack", "Payment lifecycle changes and sensitive actor actions require audit trails", "Appointments should be paid through GetTreat and represented in transaction history", "Refunds/reversals reverse provider and platform ledger shares; provider amounts already paid are recoverable against future earnings"],
+      "open_product_decisions": ["Provider bank setup/verification and Paystack transfer approval, retry and failure-reconciliation rules"]
     }
   ],
   "schemas": {

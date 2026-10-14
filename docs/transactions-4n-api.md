@@ -27,11 +27,11 @@ their own attempts, a provider sees attempts tied to their own provider profile,
 admin with `manage_transactions` or a super admin sees platform-wide attempts.
 
 This slice does not create money movement or alter payment state. It returns only fields
-persisted in the current codebase. It omits the Figma's platform-subscription records
-(phase 4O), appointments, ads, wallet/deposits, withdrawals, provider earnings/payouts,
-platform fees/commissions, payment-method labels, bank-account details, refunds,
-receipts, and summary analytics because their entities or approved rules are not
-implemented here. The visible 15% fee is not calculated or reported by this API.
+persisted in the current codebase. It omits platform-subscription records (phase 4O),
+appointments, provider balance/withdrawal records, commission accounting,
+payment-method labels, bank-account details, refunds, receipts, and summary analytics
+because their entities or complete rules are not implemented here. Ads are not part of
+the product scope.
 
 ## Routes
 
@@ -145,7 +145,40 @@ Example not-found response:
 
 ## Current gaps for later 4N work
 
-Before claiming the full Figma transaction domain is complete, map and approve the
-separate platform subscription, appointment, ads, wallet/deposit, withdrawal, payout,
-fee/commission, refund, payment-method, receipt, and transaction-summary workflows.
-Do not treat these as provider-service subscription payment attempts.
+## Confirmed next-stage financial requirements (2026-10-14)
+
+The user has confirmed the following requirements for the next 4N slices:
+
+- Provider-service subscription charges and the patient's GetTreat platform
+  subscription are separate payment domains. Platform subscription remains phase 4O.
+- No ads transaction type or ads billing workflow is in scope, even if an export
+  contains a mock row labelled “Getreat ads”.
+- Paystack remains the payment gateway. GetTreat must not store patient card details.
+- The owner must be able to configure the platform commission percentage in the
+  singleton `System` configuration. The current displayed/configured target is 15%.
+- Commission is deducted from provider earnings, not added to the patient's charge.
+  For provider-service subscription payments it is accounted for only after a payment
+  succeeds. The provider's resulting share accrues to a provider balance.
+- The same commission applies to successful paid provider appointments.
+- A transaction snapshots the configured commission percentage when checkout is
+  initialized, so changing the system setting does not alter an in-progress purchase.
+- A confirmed refund or reversal reverses both the provider share and platform fee in
+  the ledger. If the provider share has already been paid out, the resulting negative
+  provider balance is recorded as recoverable and offsets future earnings.
+- Providers request withdrawals; an admin reviews/processes the request to the
+  provider's bank through Paystack. Do not treat a displayed balance as a mutable
+  number without auditable ledger entries.
+- Payment/transaction state changes (including pending, success and failure) and
+  sensitive actor actions require audit trails.
+- Appointment booking is intended to be paid through GetTreat and appear in
+  transaction history. Appointment APIs/payment records do not exist yet; map that
+  workflow before adding appointment charge endpoints.
+
+The remaining implementation detail to map before payout processing is:
+
+- Provider bank-account setup/verification and the exact Paystack transfer approval,
+  retry, and failure-reconciliation workflow.
+
+Do not implement transaction types by inferring them from mock rows. The currently
+implemented 4N endpoints remain read-only and limited to provider-service payment
+attempts until the required ledger and workflow contracts are approved.
