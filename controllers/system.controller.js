@@ -8,6 +8,21 @@ export const getSubscriptions = async (_req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const getPlatformFinancialSettings = async (_req, res, next) => {
+  try {
+    const data = await systemService.getPlatformFinancialSettings();
+    return sendSuccess(res, { msg: "Platform financial settings retrieved successfully", data });
+  } catch (error) { next(error); }
+};
+
+export const updatePlatformFee = async (req, res, next) => {
+  try {
+    const actorId = req.user?._id?.toString?.() ?? req.user?.id;
+    const data = await systemService.updatePlatformFee(req.body.platform_fee_percent, actorId);
+    return sendSuccess(res, { msg: "Platform commission rate updated successfully", data });
+  } catch (error) { next(error); }
+};
+
 export const getPreferredChoices = async (_req, res, next) => {
   try {
     const data = await systemService.getPreferredChoices();

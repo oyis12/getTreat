@@ -48,6 +48,37 @@ export const verifyPaystackTransaction = (reference) =>
 export const getPaystackTransaction = (transactionId) =>
   paystackRequest(`/transaction/${encodeURIComponent(transactionId)}`);
 
+export const listPaystackBanks = ({ country = "nigeria", currency = "NGN" } = {}) => {
+  const query = new URLSearchParams({ country, currency, perPage: "100" });
+  return paystackRequest(`/bank?${query}`);
+};
+
+export const resolvePaystackBankAccount = ({ accountNumber, bankCode }) => {
+  const query = new URLSearchParams({ account_number: accountNumber, bank_code: bankCode });
+  return paystackRequest(`/bank/resolve?${query}`);
+};
+
+export const createPaystackTransferRecipient = ({ name, accountNumber, bankCode, email }) =>
+  paystackRequest("/transferrecipient", {
+    method: "POST",
+    body: { type: "nuban", name, account_number: accountNumber, bank_code: bankCode, currency: "NGN", email },
+  });
+
+export const initiatePaystackTransfer = ({ amountKobo, reference, recipientCode, reason }) =>
+  paystackRequest("/transfer", {
+    method: "POST",
+    body: { source: "balance", amount: amountKobo, recipient: recipientCode, reference, reason },
+  });
+
+export const verifyPaystackTransfer = (reference) =>
+  paystackRequest(`/transfer/verify/${encodeURIComponent(reference)}`);
+
+export const finalizePaystackTransfer = ({ transferCode, otp }) =>
+  paystackRequest("/transfer/finalize_transfer", {
+    method: "POST",
+    body: { transfer_code: transferCode, otp },
+  });
+
 export const chargePaystackAuthorization = ({ email, authorizationCode, amountKobo, reference, metadata }) =>
   paystackRequest("/transaction/charge_authorization", {
     method: "POST",

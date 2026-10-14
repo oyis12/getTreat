@@ -80,6 +80,14 @@ const systemSchema = new Schema(
       default: () => ({}),
     },
 
+    platform_fee_percent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 15,
+      required: true,
+    },
+
     service_categories: {
       type: [serviceCategorySchema],
       default: () => [

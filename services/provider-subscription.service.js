@@ -5,6 +5,7 @@ import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderService from "../models/provider-service.model.js";
 import ProviderSubscription from "../models/provider-subscription.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
+import System from "../models/system.model.js";
 import PaymentAuthorization from "../models/payment-authorization.model.js";
 import PaystackWebhookEvent from "../models/paystack-webhook-event.model.js";
 import User from "../models/user.model.js";
@@ -23,6 +24,7 @@ import {
   verifyPaystackTransaction,
   verifyPaystackWebhookSignature,
 } from "./paystack.service.js";
+import { calculateProviderPaymentSplit, postProviderPaymentEarnings, reverseProviderPaymentEarnings, writeAuditEvent } from "./financial-ledger.service.js";
 
 const validId = (id) => mongoose.isValidObjectId(id);
 const newReference = () => `gt4m${randomBytes(18).toString("hex")}`;
@@ -194,6 +196,9 @@ export const startProviderSubscription = async (userId, serviceId, autoRenew, id
   const price = discountedPrice(service);
   const amountKobo = Math.round(price * 100);
   if (!Number.isSafeInteger(amountKobo) || amountKobo < 1) throw new AppError("Provider service price is invalid for Paystack", 422);
+  const globalSystem = await System.findOne({ key: "global" }).select("platform_fee_percent").lean();
+  const commissionRate = Number(globalSystem?.platform_fee_percent ?? 15);
+  const earningsSplit = calculateProviderPaymentSplit(amountKobo, commissionRate);
   const serviceSnapshot = {
     title: service.title,
     original_price: service.original_price,
@@ -228,8 +233,14 @@ export const startProviderSubscription = async (userId, serviceId, autoRenew, id
         idempotency_key: idempotencyKey,
         requested_auto_renew: autoRenew,
         amount_kobo: amountKobo,
+        commission_rate_percent: commissionRate,
+        platform_fee_kobo: earningsSplit.platformFeeKobo,
+        provider_net_kobo: earningsSplit.providerNetKobo,
+        commission_snapshotted_at: now,
+        commission_snapshot_source: "checkout_initialization",
         billing_email: user.email,
       }], { session });
+      await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:initializing`, actor: user._id, actorRole: "patient", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, newState: "initializing", correlationId: attempt.reference, metadata: { amount_kobo: amountKobo }, session });
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -261,10 +272,12 @@ export const startProviderSubscription = async (userId, serviceId, autoRenew, id
     attempt.authorization_url = result.authorization_url;
     attempt.access_code = result.access_code ?? null;
     await attempt.save();
+    await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:pending`, actor: user._id, actorRole: "patient", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: "initializing", newState: "pending", correlationId: attempt.reference });
   } catch (error) {
     attempt.status = "failed";
     attempt.failure_reason = error.message.slice(0, 300);
     await attempt.save();
+    await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:failed`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: "initializing", newState: "failed", correlationId: attempt.reference });
     subscription.status = "payment_failed";
     await subscription.save();
     throw error;
@@ -371,8 +384,19 @@ export const fulfillVerifiedPayment = async (reference, paystackData) => {
       if (!attempt) throw new AppError("Payment attempt not found", 404);
       if (attempt.status === "success") return;
       if (["reversed", "refunded"].includes(attempt.status)) return;
+      const previousAttemptStatus = attempt.status;
       const subscription = await ProviderSubscription.findById(attempt.provider_subscription).session(session);
       if (!subscription) throw new AppError("Provider subscription not found", 404);
+      if (!attempt.commission_snapshotted_at) {
+        const system = await System.findOne({ key: "global" }).select("platform_fee_percent").session(session).lean();
+        const rate = Number(system?.platform_fee_percent ?? 15);
+        const split = calculateProviderPaymentSplit(attempt.amount_kobo, rate);
+        attempt.commission_rate_percent = rate;
+        attempt.platform_fee_kobo = split.platformFeeKobo;
+        attempt.provider_net_kobo = split.providerNetKobo;
+        attempt.commission_snapshotted_at = new Date();
+        attempt.commission_snapshot_source = "legacy_fulfillment";
+      }
       const authId = await persistAuthorization(attempt, subscription, paystackData, session);
       const now = new Date();
       const periodStart = attempt.purpose === "renewal" && subscription.ends_at ? new Date(subscription.ends_at) : now;
@@ -393,6 +417,19 @@ export const fulfillVerifiedPayment = async (reference, paystackData) => {
       attempt.verified_at = now;
       attempt.failure_reason = null;
       await attempt.save({ session });
+      await postProviderPaymentEarnings(attempt, { session });
+      await writeAuditEvent({
+        eventKey: `provider-payment:${attempt._id}:status:success`,
+        actorRole: "system",
+        action: "provider_payment_status_changed",
+        resourceType: "provider_payment_attempt",
+        resourceId: attempt._id,
+        priorState: previousAttemptStatus,
+        newState: "success",
+        correlationId: attempt.reference,
+        metadata: { gateway_transaction_id: attempt.gateway_transaction_id },
+        session,
+      });
     });
   } finally {
     await session.endSession();
@@ -405,7 +442,8 @@ const settleNonSuccess = async (attempt, paystackData) => {
   const status = paystackData.status;
   const now = new Date();
   if (["pending", "processing", "ongoing", "queued"].includes(status)) {
-    await ProviderPaymentAttempt.updateOne({ _id: attempt._id, status: { $nin: ["success", "reversed", "refunded"] } }, { $set: { status: "pending" } });
+    const changed = await ProviderPaymentAttempt.findOneAndUpdate({ _id: attempt._id, status: { $nin: ["success", "reversed", "refunded"] } }, { $set: { status: "pending" } }, { new: true });
+    if (changed && attempt.status !== "pending") await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:pending`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: attempt.status, newState: "pending", correlationId: attempt.reference });
     return { subscription: await serializeWithLatestAttempt(await ProviderSubscription.findById(attempt.provider_subscription)), payment_status: "pending" };
   }
   if (status === "reversed") {
@@ -413,7 +451,8 @@ const settleNonSuccess = async (attempt, paystackData) => {
     return { subscription: await serializeWithLatestAttempt(await ProviderSubscription.findById(attempt.provider_subscription)), payment_status: "reversed" };
   }
   if (["failed", "abandoned"].includes(status)) {
-    await ProviderPaymentAttempt.updateOne({ _id: attempt._id, status: { $nin: ["success", "reversed", "refunded"] } }, { $set: { status: "failed", failure_reason: String(paystackData.gateway_response ?? status).slice(0, 300) } });
+    const changed = await ProviderPaymentAttempt.findOneAndUpdate({ _id: attempt._id, status: { $nin: ["success", "reversed", "refunded"] } }, { $set: { status: "failed", failure_reason: String(paystackData.gateway_response ?? status).slice(0, 300) } }, { new: true });
+    if (changed) await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:failed`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: attempt.status, newState: "failed", correlationId: attempt.reference });
     if (attempt.purpose === "initial") await ProviderSubscription.updateOne({ _id: attempt.provider_subscription, status: "pending_payment" }, { $set: { status: "payment_failed" } });
     else await recordRenewalFailure(attempt, now);
     return { subscription: await serializeWithLatestAttempt(await ProviderSubscription.findById(attempt.provider_subscription)), payment_status: "failed" };
@@ -455,10 +494,22 @@ export const enqueuePaystackWebhook = async (rawBody, signature, body) => {
       : String(transaction);
   const eventId = body?.data?.id == null ? "" : String(body.data.id);
   const eventKey = createHash("sha256").update(`${eventType}:${reference ?? ""}:${gatewayTransactionId ?? ""}:${eventId}:${rawBody.toString("base64")}`).digest("hex");
+  let event;
   try {
-    await PaystackWebhookEvent.create({ event_key: eventKey, event_type: eventType, reference, gateway_transaction_id: gatewayTransactionId, status: reference || gatewayTransactionId ? "pending" : "ignored" });
+    [event] = await PaystackWebhookEvent.create([{ event_key: eventKey, event_type: eventType, reference, gateway_transaction_id: gatewayTransactionId, status: reference || gatewayTransactionId ? "pending" : "ignored" }]);
   } catch (error) {
     if (error.code !== 11000) throw error;
+    event = await PaystackWebhookEvent.findOne({ event_key: eventKey });
+  }
+  if (reference && event?.status !== "processed") {
+    await writeAuditEvent({ eventKey: `paystack-webhook:${eventKey}`, actorRole: "system", action: "paystack_webhook_received", resourceType: "paystack_webhook_event", correlationId: reference, metadata: { event_type: eventType } });
+    if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
+      const { processPaystackTransferWebhook } = await import("./provider-payout.service.js");
+      const handled = await processPaystackTransferWebhook(eventType, body?.data);
+      event.status = handled ? "processed" : "ignored";
+      event.processed_at = new Date();
+      await event.save();
+    }
   }
 };
 
@@ -475,7 +526,14 @@ export const processPendingPaystackWebhooks = async (limit = 100) => {
     try {
       const recognized = ["charge.success", "refund.processed", "charge.dispute.create"].includes(event.event_type);
       const reference = recognized ? await resolveWebhookReference(event) : null;
-      if (event.event_type === "charge.success" && reference) {
+      if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event_type) && reference) {
+        const { verifyPaystackTransfer } = await import("./paystack.service.js");
+        const { processPaystackTransferWebhook } = await import("./provider-payout.service.js");
+        const transfer = await verifyPaystackTransfer(reference);
+        const verifiedEvent = { success: "transfer.success", failed: "transfer.failed", reversed: "transfer.reversed" }[transfer?.status];
+        if (verifiedEvent) await processPaystackTransferWebhook(verifiedEvent, transfer);
+        event.status = "processed";
+      } else if (event.event_type === "charge.success" && reference) {
         const payment = await verifyPaystackTransaction(reference);
         await fulfillVerifiedPayment(reference, payment);
         event.status = "processed";
@@ -511,14 +569,25 @@ const resolveWebhookReference = async (event) => {
 };
 
 const revokeSubscriptionForPayment = async (reference, reason) => {
-  const attempt = await ProviderPaymentAttempt.findOne({ reference });
-  if (!attempt) return;
-  const now = new Date();
-  await ProviderPaymentAttempt.updateOne({ _id: attempt._id }, { $set: { status: reason, failure_reason: reason } });
-  await ProviderSubscription.updateOne(
-    { _id: attempt.provider_subscription },
-    { $set: { status: "revoked", auto_renew: false, renewal_grace_ends_at: null, next_renewal_attempt_at: null, renewal_lock_until: null, ends_at: now } }
-  );
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const attempt = await ProviderPaymentAttempt.findOne({ reference }).session(session);
+      if (!attempt || ["reversed", "refunded"].includes(attempt.status)) return;
+      const previous = attempt.status;
+      const now = new Date();
+      attempt.status = reason;
+      attempt.failure_reason = reason;
+      await attempt.save({ session });
+      if (previous === "success") await reverseProviderPaymentEarnings(attempt, reason, { session });
+      await ProviderSubscription.updateOne(
+        { _id: attempt.provider_subscription },
+        { $set: { status: "revoked", auto_renew: false, renewal_grace_ends_at: null, next_renewal_attempt_at: null, renewal_lock_until: null, ends_at: now } },
+        { session }
+      );
+      await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:${reason}`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: previous, newState: reason, correlationId: reference, session });
+    });
+  } finally { await session.endSession(); }
 };
 
 export const runDueProviderRenewals = async (limit = 100) => {
@@ -585,6 +654,9 @@ export const runDueProviderRenewals = async (limit = 100) => {
       continue;
     }
     const amountKobo = Math.round(claimed.service_snapshot.discounted_price * 100);
+    const globalSystem = await System.findOne({ key: "global" }).select("platform_fee_percent").lean();
+    const commissionRate = Number(globalSystem?.platform_fee_percent ?? 15);
+    const earningsSplit = calculateProviderPaymentSplit(amountKobo, commissionRate);
     const reference = newReference();
     const attempt = await ProviderPaymentAttempt.create({
       provider_subscription: claimed._id,
@@ -595,10 +667,16 @@ export const runDueProviderRenewals = async (limit = 100) => {
       status: "pending",
       reference,
       amount_kobo: amountKobo,
+      commission_rate_percent: commissionRate,
+      platform_fee_kobo: earningsSplit.platformFeeKobo,
+      provider_net_kobo: earningsSplit.providerNetKobo,
+      commission_snapshotted_at: new Date(),
+      commission_snapshot_source: "checkout_initialization",
       currency: claimed.service_snapshot.currency,
       billing_email: authorization.billing_email,
       attempt_number: attemptNumber,
     });
+    await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:pending`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, newState: "pending", correlationId: attempt.reference, metadata: { purpose: "renewal", amount_kobo: amountKobo } });
     try {
       const authorizationCode = decryptPaymentToken({
         ciphertext: authorization.authorization_code_encrypted,
@@ -622,9 +700,11 @@ export const runDueProviderRenewals = async (limit = 100) => {
         const verified = await verifyPaystackTransaction(reference);
         await fulfillVerifiedPayment(reference, verified);
       } else if (["failed", "abandoned"].includes(charge.status)) {
+        const previousStatus = attempt.status;
         attempt.status = "failed";
         attempt.failure_reason = String(charge.gateway_response ?? charge.status).slice(0, 300);
         await attempt.save();
+        await writeAuditEvent({ eventKey: `provider-payment:${attempt._id}:status:failed`, actorRole: "system", action: "provider_payment_status_changed", resourceType: "provider_payment_attempt", resourceId: attempt._id, priorState: previousStatus, newState: "failed", correlationId: attempt.reference });
         await recordRenewalFailure(attempt, now);
       }
     } catch (error) {

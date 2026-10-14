@@ -1,9 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-    "version": "2026-10-14",
+  "version": "2026-10-14-4N",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service subscriptions, Paystack billing, and read-only transaction history.",
+    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service billing, commission ledger, provider payouts, Paystack transfers, and transaction history.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -45,7 +45,7 @@
       "Admin health-condition management",
       "Super Admin account management and admin authentication",
       "4M patient-to-provider-service subscriptions and Paystack payment lifecycle",
-      "4N transaction history, details and administrative transaction workflows",
+      "4N transaction history, commission ledger and provider payouts",
       "4O platform subscription"
     ],
     "route_mounts": {
@@ -64,6 +64,8 @@
       "/api/providers": "provider-discovery.routes.js",
       "/api/admin/providers": "admin-provider.routes.js",
       "/api/admin/transactions": "admin-transaction.routes.js",
+      "/api/admin/payouts": "admin-payout.routes.js",
+      "/api/provider/me/earnings and payouts": "provider-payout.routes.js via provider.routes.js",
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
@@ -93,6 +95,8 @@
       "/api/providers": "provider-discovery.routes.js",
       "/api/admin/providers": "admin-provider.routes.js",
       "/api/admin/transactions": "admin-transaction.routes.js",
+      "/api/admin/payouts": "admin-payout.routes.js",
+      "/api/provider/me/earnings and payouts": "provider-payout.routes.js via provider.routes.js",
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
@@ -102,7 +106,7 @@
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
-    "important_latest_codebase_note": "4N read-only transaction history/details are implemented for current provider-service subscription payment attempts only. Confirmed future direction: configurable platform commission (currently 15%) is deducted from successful provider-service and appointment earnings, providers request withdrawals for admin Paystack processing, transaction state and sensitive actions are audited, and appointments are intended to be paid through GetTreat. Each checkout snapshots the configured commission rate; a refund/reversal reverses both provider and platform ledger shares, with an already-paid provider share recorded as recoverable against future earnings. Provider bank setup, recipient, ledger, withdrawal and Paystack transfer/webhook flow are mapped but not implemented; see docs/provider-payouts-4n-contract.md. Platform subscriptions remain separate in 4O. Ads are out of scope. 4M worker code/config remains prepared but hosted deployment is intentionally paused; check Render for possible Blueprint auto-sync before assuming it is absent.",
+    "important_latest_codebase_note": "4N provider-service transaction history, owner-configurable commission snapshots, provider/platform ledger posting and reversals, provider earnings/bank payout methods, admin Paystack transfer review, transfer webhook settlement, and audit timelines are implemented and mounted; see docs/financial-4n-api.md and docs/transactions-4n-api.md. Commission defaults to 15%, is snapshotted at checkout and deducted only after successful payment. Provider transfers require funded Paystack balance. Appointment payment integration awaits the appointment domain, and platform subscriptions remain separate in 4O. Ads are out of scope. The provider billing worker hosting remains paused; check Render for possible Blueprint auto-sync before assuming it is absent. Do not run the historical earnings backfill until the target database and applied rate are reviewed.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -118,6 +122,41 @@
     }
   },
   "endpoint_groups": [
+    {
+      "name": "4N Commission, Provider Earnings and Payouts",
+      "base_path": "/api/super-admin/platform-financial-settings, /api/provider/me, /api/admin/payouts",
+      "description": "Owner commission configuration, provider ledger balances and bank payout requests, admin Paystack transfer handling, and sensitive financial audit events.",
+      "availability": "mounted",
+      "documentation": "docs/financial-4n-api.md",
+      "design_mapping": {
+        "feature": "Provider earnings, payout methods and admin withdrawal processing",
+        "actors": ["provider", "admin", "super_admin"],
+        "authorization": "Super admin manages commission settings; provider accesses only its own balance, payout methods and payout requests; admin requires manage_transactions; super_admin bypasses admin permission checks.",
+        "rules": ["Commission defaults to 15% and is snapshotted at provider-service checkout initialization.", "Commission is deducted from provider earnings only after payment success.", "Raw bank account digits and OTPs are not stored.", "Payout amount comes from available provider balance and uses provider-scoped Idempotency-Key.", "Signed Paystack transfer webhooks settle payout state idempotently.", "Appointment earnings await the appointment payment domain; platform subscriptions remain in 4O."]
+      },
+      "endpoints": [
+        {"method":"GET","path":"/api/super-admin/platform-financial-settings","summary":"Read platform fee percentage","availability":"mounted","auth":"bearer","roles":["super_admin"],"response":{"status":200,"data":{"platform_fee_percent":15}}},
+        {"method":"PATCH","path":"/api/super-admin/platform-financial-settings","summary":"Update platform fee percentage","availability":"mounted","auth":"bearer","roles":["super_admin"],"request":{"body":{"platform_fee_percent":15}},"response":{"status":200,"data":{"platform_fee_percent":15}}},
+        {"method":"GET","path":"/api/provider/me/earnings","summary":"Get own available, reserved, lifetime net and recoverable earnings","availability":"mounted","auth":"bearer","roles":["provider"],"response":{"status":200,"data":"PROVIDER_EARNINGS_BALANCE"}},
+        {"method":"GET","path":"/api/provider/me/payout-methods/banks","summary":"List Paystack supported banks","availability":"mounted","auth":"bearer","roles":["provider"],"response":{"status":200,"data":"BANKS"}},
+        {"method":"POST","path":"/api/provider/me/payout-methods/resolve","summary":"Resolve a Nigerian bank account name","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"bank_code":"058","account_number":"0001234567"}},"response":{"status":200,"data":{"account_name":"Jane Doe","bank_code":"058"}}},
+        {"method":"GET","path":"/api/provider/me/payout-methods","summary":"List own masked payout methods","availability":"mounted","auth":"bearer","roles":["provider"]},
+        {"method":"POST","path":"/api/provider/me/payout-methods","summary":"Add verified Paystack bank recipient","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"body":{"bank_code":"058","account_number":"0001234567","confirmed_account_name":"Jane Doe"}},"response":{"status":201,"data":"MASKED_PAYOUT_METHOD"}},
+        {"method":"PATCH","path":"/api/provider/me/payout-methods/:methodId/default","summary":"Set own payout method as default","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"path_params":{"methodId":"PAYOUT_METHOD_ID"}}},
+        {"method":"DELETE","path":"/api/provider/me/payout-methods/:methodId","summary":"Deactivate own payout method","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"path_params":{"methodId":"PAYOUT_METHOD_ID"}}},
+        {"method":"GET","path":"/api/provider/me/payouts","summary":"List own payout requests","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"query_params":{"page":1,"limit":20,"status":"all|requested|processing|otp_required|paid|rejected|failed|reversed"}}},
+        {"method":"POST","path":"/api/provider/me/payouts","summary":"Request withdrawal from available earnings","availability":"mounted","auth":"bearer","roles":["provider"],"headers":{"Idempotency-Key":"payout-request-20261014-001"},"request":{"body":{"amount":25000,"payout_method_id":"OPTIONAL_OWN_METHOD_ID"}},"response":{"status":201,"data":"PAYOUT_AND_UPDATED_BALANCE"}},
+        {"method":"GET","path":"/api/provider/me/payouts/:payoutId","summary":"Get own payout request","availability":"mounted","auth":"bearer","roles":["provider"],"request":{"path_params":{"payoutId":"PAYOUT_ID"}}},
+        {"method":"GET","path":"/api/admin/payouts","summary":"List payout requests for review","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"]},
+        {"method":"GET","path":"/api/admin/payouts/:payoutId","summary":"Get payout details and safe audit timeline","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"]},
+        {"method":"POST","path":"/api/admin/payouts/:payoutId/approve","summary":"Approve and initiate Paystack balance transfer","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"],"request":{"body":{"reason":"Reviewed provider request"}}},
+        {"method":"POST","path":"/api/admin/payouts/:payoutId/reject","summary":"Reject payout and release reserved funds","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"],"request":{"body":{"reason":"Account details require correction"}}},
+        {"method":"POST","path":"/api/admin/payouts/:payoutId/retry","summary":"Retry conclusively failed transfer","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"]},
+        {"method":"POST","path":"/api/admin/payouts/:payoutId/finalize-transfer","summary":"Submit Paystack transfer OTP without storing it","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"],"request":{"body":{"otp":"123456"}}},
+        {"method":"POST","path":"/api/admin/payouts/:payoutId/reconcile-transfer","summary":"Verify transfer status directly with Paystack","availability":"mounted","auth":"bearer","roles":["admin","super_admin"],"permissions":["manage_transactions for admin; super_admin bypasses"]}
+      ],
+      "webhook": {"method":"POST","path":"/api/payments/paystack/webhook","events":["transfer.success","transfer.failed","transfer.reversed"],"availability":"mounted","auth":"x-paystack-signature HMAC-SHA512","description":"Uses the existing Paystack webhook endpoint; transfer events are amount/currency/reference matched and settled idempotently."}
+    },
     {
       "name": "Authentication",
       "base_path": "/api/auth",
@@ -2096,12 +2135,12 @@
           "notes": ["Reject invalid signatures.", "Deduplicate event/transaction processing.", "Verify reference, amount, currency and purchase metadata before granting or renewing access."]
         }
       ],
-      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "Read-only 4N patient/provider/admin endpoints list provider-service subscription payment attempts; platform subscriptions and other transaction types remain deferred.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
+      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "4N patient/provider/admin endpoints list provider-service subscription attempts and expose commission snapshots to provider/admin. Commission and provider earnings are ledgered; provider bank payout requests and admin Paystack transfers are documented in docs/financial-4n-api.md. Platform subscriptions and appointments remain deferred.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
     },
     {
       "name": "4N Provider-Service Subscription Transaction History",
       "base_path": "/api/user/me/transactions, /api/provider/me/transactions, /api/admin/transactions",
-      "description": "Read-only patient, provider and admin history/details backed by existing ProviderPaymentAttempt records. This is the supported transaction type in the current 4N slice.",
+      "description": "Patient, provider and admin transaction history/details for provider-service payment attempts, including commission split and audit status timeline.",
       "availability": "mounted",
       "design_mapping": {
         "feature": "List and view provider-service subscription payment attempts",
@@ -2109,7 +2148,7 @@
         "design_references": ["designs/patients_dashboard/Transactions/Patients Transactions History.png", "designs/patients_dashboard/Transactions/Patients transactions details.png", "designs/providers ui/transactions/7.0 Provider's Transaction.png", "designs/providers ui/transactions/7.1 Provider's Transaction History.png", "designs/providers ui/transactions/7.2 Provider's Transaction details.png", "designs/admin/patients/Control Admin- Transactions.png", "designs/admin/patients/Control Admin- Transaction details.png", "designs/super admin/patients/Admin- patients(Transactions).png", "designs/super admin/patients/Admin- patients(Transaction details).png", "designs/super admin/providers/Admin- view provider (Transaction).png"],
         "entity": "ProviderPaymentAttempt with ProviderSubscription, ProviderProfile, and PatientProfile references",
         "authorization": "Patient reads attempts owned by their patient profile; provider reads attempts tied to their provider profile; admin requires manage_transactions; super_admin bypasses admin scopes.",
-        "rules": ["Payment-attempt status is distinct from subscription entitlement status.", "Only currently persisted payment fields are returned; billing email, idempotency keys, access codes, authorization data and internal failure messages remain private.", "No payment state is changed by a history/detail read.", "Platform fees, withdrawals, payouts, payment method, wallet activity and refunds are not derived or invented."]
+        "rules": ["Payment-attempt status is distinct from subscription entitlement status.", "Only currently persisted payment fields are returned; billing email, idempotency keys, access codes, authorization data and internal failure messages remain private.", "No payment state is changed by a history/detail read.", "Provider/admin views include the commission snapshot and provider net; patient views show the gross charge.", "Successful provider payments post provider and platform ledger entries; refund/reversal events reverse both shares."]
       },
       "endpoints": [
         {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
@@ -2120,9 +2159,9 @@
         {"method": "GET", "path": "/api/admin/transactions/:transactionId", "summary": "Get one platform provider-service payment attempt", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT_AND_PROVIDER"}}
       ],
       "documentation": "docs/transactions-4n-api.md",
-      "deferred_design_items": ["4O platform subscription transactions", "appointments and their payment records", "provider balance and withdrawal/payout records", "platform commission ledger and refunds/reversals", "payment method and bank data", "receipt generation", "earnings summaries"],
+      "deferred_design_items": ["4O platform subscription transactions", "appointments and their payment records", "receipt generation"],
       "confirmed_product_direction": ["Ads are out of scope", "Platform subscription remains separate from provider-service subscriptions in 4O", "Owner-configurable commission currently targets 15 percent and is deducted from successful provider-service subscription and appointment earnings rather than added to patient charges", "Each checkout snapshots the commission rate at initialization", "Providers request withdrawals and admins process them to provider bank accounts using Paystack", "Payment lifecycle changes and sensitive actor actions require audit trails", "Appointments should be paid through GetTreat and represented in transaction history", "Refunds/reversals reverse provider and platform ledger shares; provider amounts already paid are recoverable against future earnings"],
-      "payout_contract": "Mapped, not implemented; see docs/provider-payouts-4n-contract.md. Uses Paystack bank resolve and NUBAN recipient creation, stores recipient_code plus masked details, reserves immutable-ledger funds for withdrawal requests, requires manage_transactions approval, initiates transfers from Paystack balance, and reconciles signed transfer webhooks idempotently.",
+      "payout_contract": "Implemented and mounted; see docs/financial-4n-api.md. Provider bank accounts are verified through Paystack, stored as recipient code plus masked account details, and support multiple methods with one default. Payout requests use provider-scoped Idempotency-Key, reserve available balance, and require manage_transactions for admin processing. Transfer status is reconciled from signed Paystack webhooks; OTP is never stored.",
       "open_product_decisions": []
     }
   ],

@@ -2,8 +2,9 @@
 
 ## Scope and design mapping
 
-This first 4N slice exposes read-only transaction history/details for provider-service
-subscription payment attempts that already exist in `ProviderPaymentAttempt`. It covers
+The 4N transaction slice exposes history/details for provider-service subscription
+payment attempts that already exist in `ProviderPaymentAttempt`, plus commission
+snapshots, ledger posting/reversals, provider earnings and Paystack payout processing. It covers
 the transaction history/detail views for patients, providers, and admins using the
 screens in:
 
@@ -26,12 +27,12 @@ context. No separate transaction collection is added. The authenticated patient 
 their own attempts, a provider sees attempts tied to their own provider profile, and an
 admin with `manage_transactions` or a super admin sees platform-wide attempts.
 
-This slice does not create money movement or alter payment state. It returns only fields
-persisted in the current codebase. It omits platform-subscription records (phase 4O),
-appointments, provider balance/withdrawal records, commission accounting,
-payment-method labels, bank-account details, refunds, receipts, and summary analytics
-because their entities or complete rules are not implemented here. Ads are not part of
-the product scope.
+The transaction history endpoints remain read-only. Verified payment/webhook handling
+posts commission and provider earnings to the ledger; confirmed refunds/reversals reverse
+both ledger shares. Payout operations are documented in
+[`financial-4n-api.md`](financial-4n-api.md). Platform-subscription records (phase 4O),
+appointment records/payments, receipts, and summary analytics are not implemented here.
+Ads are not part of the product scope.
 
 ## Routes
 
@@ -174,11 +175,6 @@ The user has confirmed the following requirements for the next 4N slices:
   transaction history. Appointment APIs/payment records do not exist yet; map that
   workflow before adding appointment charge endpoints.
 
-Provider bank setup and payout processing are now mapped in
-`docs/provider-payouts-4n-contract.md`, including Paystack account resolution,
-recipient-code storage, idempotent transfer references, OTP handling, webhook
-reconciliation, and ledger holds. These are proposed routes and are not mounted yet.
-
-Do not implement transaction types by inferring them from mock rows. The currently
-implemented 4N endpoints remain read-only and limited to provider-service payment
-attempts until the ledger and payout contracts are implemented and tested.
+The commission, earnings ledger, bank setup and payout routes are implemented as
+documented in [`financial-4n-api.md`](financial-4n-api.md). Appointment earnings and
+platform-subscription transactions still require their respective domains.

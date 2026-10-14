@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import PatientProfile from "../models/patient-profile.model.js";
 import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
+import AuditLog from "../models/audit-log.model.js";
 import AppError from "../utils/AppError.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -64,6 +65,14 @@ export const serializeTransactionAttempt = (attempt, audience) => {
     provider_subscription_id: idOf(subscription),
   };
 
+  if (audience === "provider" || audience === "admin") {
+    result.commission_rate_percent = attempt.commission_rate_percent ?? 0;
+    result.platform_fee_minor = attempt.platform_fee_kobo ?? 0;
+    result.platform_fee = Number(((attempt.platform_fee_kobo ?? 0) / 100).toFixed(2));
+    result.provider_net_minor = attempt.provider_net_kobo ?? attempt.amount_kobo;
+    result.provider_net = Number(((attempt.provider_net_kobo ?? attempt.amount_kobo) / 100).toFixed(2));
+  }
+
   if (audience === "patient" || audience === "admin") {
     result.provider = providerProfile ? {
       id: idOf(providerProfile),
@@ -108,7 +117,19 @@ const findTransaction = async (scope, transactionId, audience) => {
     ProviderPaymentAttempt.findOne({ ...scope, _id: transactionId })
   ).lean();
   if (!document) throw new AppError("Transaction not found", 404);
-  return serializeTransactionAttempt(document, audience);
+  const transaction = serializeTransactionAttempt(document, audience);
+  const auditEvents = await AuditLog.find({ resource_type: "provider_payment_attempt", resource_id: document._id })
+    .sort({ createdAt: 1 })
+    .select("action prior_state new_state createdAt actor_role")
+    .lean();
+  transaction.audit_timeline = auditEvents.map((event) => ({
+    action: event.action,
+    status_before: event.prior_state,
+    status_after: event.new_state,
+    actor_role: event.actor_role,
+    created_at: event.createdAt,
+  }));
+  return transaction;
 };
 
 const getOwnedProfile = async (Profile, userId, label) => {
