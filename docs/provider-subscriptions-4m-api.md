@@ -22,7 +22,7 @@ The backend does not store card number, CVV, or expiry date. The Paystack webhoo
 to configure in the Paystack dashboard is:
 
 ```text
-https://<your-api-host>/api/payments/paystack/webhook
+https://gettreat.onrender.com/api/payments/paystack/webhook
 ```
 
 The webhook validates `x-paystack-signature` against the raw request body using the
