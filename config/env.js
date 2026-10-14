@@ -49,4 +49,11 @@ export const env = {
   maxOtpAttempts: parseInt(process.env.MAX_OTP_ATTEMPTS || "5",10),
 
   emailMode: process.env.EMAIL_MODE || "console",
+
+  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY || "",
+  paystackCallbackUrl: process.env.PAYSTACK_CALLBACK_URL || "",
+  paymentTokenEncryptionKey: process.env.PAYMENT_TOKEN_ENCRYPTION_KEY || "",
+  providerRenewalMaxAttempts: 3,
+  providerRenewalGraceDays: 7,
+  providerRenewalRetryIntervalDays: 3,
 };

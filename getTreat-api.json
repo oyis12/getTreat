@@ -1,9 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-    "version": "2026-10-03",
+    "version": "2026-10-14",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for the current GetTreat backend, including patient health domains, provider registration/offerings/instructions, admin permissions, and super-admin account management.",
+    "purpose": "Frontend integration reference for the currently mounted GetTreat backend, including provider-service subscriptions and Paystack billing APIs.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -43,7 +43,10 @@
       "My Baby Progress",
       "Service catalogue/system configuration",
       "Admin health-condition management",
-      "Super Admin account management and admin authentication"
+      "Super Admin account management and admin authentication",
+      "4M patient-to-provider-service subscriptions and Paystack payment lifecycle",
+      "4N transaction history, details and administrative transaction workflows",
+      "4O platform subscription"
     ],
     "route_mounts": {
       "/api/auth": "auth.routes.js",
@@ -56,17 +59,20 @@
       "/api/user (pregnancy)": "pregnancy.routes.js",
       "/api/user (health assessments)": "health-assessment.routes.js",
       "/api/user (pregnancy health conditions)": "pregnancy-health-condition.routes.js",
-      "/api/user (vitals)": "vitals.routes.js",
-      "/api/user/babies": "baby-progress.routes.js",
+      "/api/user/me/provider-instructions": "patient-provider-instruction.routes.js",
+      "/api/provider": "provider.routes.js",
+      "/api/providers": "provider-discovery.routes.js",
+      "/api/admin/providers": "admin-provider.routes.js",
+      "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
+      "/api/user (vitals)": "vitals.routes.js via user.routes.js",
+      "/api/user/babies": "baby-progress.routes.js and baby.routes.js",
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_verification": {
-      "verified_from_uploaded_zip": true,
-      "archive_sha256": "2d9a46e5cbe982c20125b19a4e8efe3ef9ffb8f489aaef470d941126ce4aeb26",
-      "archive_size_bytes": 95338208,
-      "verified_at_utc": "2026-10-02T16:35:27.568732+00:00",
-      "api_reference_source_inside_archive": "getTreat/getTreat-api.json",
-      "server_source_inside_archive": "getTreat/server.js"
+      "verified_from": ["server.js", "routes/*.routes.js", "controllers", "services", "validators", "models"],
+      "verified_at": "2026-10-14",
+      "note": "Mounted endpoint paths were checked against the current working tree."
     },
     "route_mounts_verified_from_server_js": {
       "/api/auth": "auth.routes.js",
@@ -79,12 +85,18 @@
       "/api/user (pregnancy)": "pregnancy.routes.js",
       "/api/user (health assessments)": "health-assessment.routes.js",
       "/api/user (pregnancy health conditions)": "pregnancy-health-condition.routes.js",
-      "/api/user (vitals)": "vitals.routes.js",
-      "/api/user/babies": "baby-progress.routes.js",
+      "/api/user/me/provider-instructions": "patient-provider-instruction.routes.js",
+      "/api/provider": "provider.routes.js",
+      "/api/providers": "provider-discovery.routes.js",
+      "/api/admin/providers": "admin-provider.routes.js",
+      "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
+      "/api/user (vitals)": "vitals.routes.js via user.routes.js",
+      "/api/user/babies": "baby-progress.routes.js and baby.routes.js",
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
-    "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. The Vitals router is part of the current working patient API after the validator fix.",
-    "important_latest_codebase_note": "This reference includes initial Super Admin account management and admin 2FA routes. Provider approval requires manage_providers for admins; admin health-condition management requires manage_assessments. Provider registration requires higher institution certificate, NYSC certificate/exemption, and medical license.",
+    "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
+    "important_latest_codebase_note": "This reference includes 4M provider-service subscriptions, hosted Paystack checkout and payment verification, signed webhook processing, opt-in encrypted reusable authorization, and a scheduled renewal worker. The worker must be scheduled with the deployment environment. Provider subscription remains separate from platform subscription.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -1222,7 +1234,7 @@
         "verified": true,
         "note": "Validator exports were restored and the Vitals API is working."
       },
-      "availability": "active",
+      "availability": "mounted",
       "frontend_note": "Protected patient endpoints. Ownership is derived from the authenticated user; do not send patientId/userId/pregnancyId to claim ownership."
     },
     {
@@ -1998,6 +2010,87 @@
         }
       ],
       "availability": "mounted"
+    },
+    {
+      "name": "Baby compatibility routes",
+      "base_path": "/api/user/babies",
+      "description": "Compatibility mounts for baby collection and photo routes. Canonical patient self-service routes also exist under /api/user/me/babies.",
+      "endpoints": [
+        { "method": "POST", "path": "/api/user/babies", "summary": "Create baby (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "GET", "path": "/api/user/babies", "summary": "List babies (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "GET", "path": "/api/user/babies/:babyId", "summary": "Get baby (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "PATCH", "path": "/api/user/babies/:babyId", "summary": "Update baby (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "DELETE", "path": "/api/user/babies/:babyId", "summary": "Delete baby (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "POST", "path": "/api/user/babies/:babyId/photos", "summary": "Add baby photo (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "PATCH", "path": "/api/user/babies/:babyId/photos/:photoId", "summary": "Replace baby photo (compatibility mount)", "auth": "bearer", "availability": "mounted" },
+        { "method": "DELETE", "path": "/api/user/babies/:babyId/photos/:photoId", "summary": "Delete baby photo (compatibility mount)", "auth": "bearer", "availability": "mounted" }
+      ],
+      "availability": "mounted"
+    },
+    {
+      "name": "4M Patient-to-Provider-Service Subscriptions and Paystack",
+      "base_path": "/api/user/me/provider-subscriptions",
+      "description": "Patient subscriptions to one provider-owned service, with Paystack checkout, verified payment activation, optional recurring renewal and webhook reconciliation. Provider and patient profile IDs are resolved server-side. This domain is separate from the GetTreat platform subscription.",
+      "availability": "mounted",
+      "design_mapping": {
+        "feature": "Purchase and manage a patient's subscription to one provider-owned service",
+        "actor": "patient",
+        "design_references": ["designs/patients_dashboard/Providers/Patients providers details(About).png", "designs/patients_dashboard/Providers/Patients porviders details(Subscribed).png", "designs/patients_dashboard/Transactions/Patients Transactions History.png", "designs/patients_dashboard/Transactions/Patients transactions details.png"],
+        "authorization": "Patient bearer token; ownership from authenticated user. Paystack webhook validates x-paystack-signature over raw request bytes.",
+        "purchase_rules": [
+          "Client supplies provider_service_id only; server resolves provider_profile and patient_profile.",
+          "Service must be active and provider approved, verified, and active when checkout starts.",
+          "Price, discount, currency and cadence come from ProviderService and are snapshotted on purchase.",
+          "Checkout creates a pending payment attempt and returns the Paystack hosted checkout URL. Never activate from browser callback or client-supplied payment status.",
+          "Activate only after server-side verification of unique reference, success status, expected amount, currency, email and purchase metadata.",
+          "Use an Idempotency-Key and unique references/events so retries and duplicate webhooks cannot double-charge or grant access twice.",
+          "Auto-renew defaults off and requires explicit consent. It uses Paystack reusable authorization; retain no PAN, CVV or expiry. Encrypt any reusable authorization token at rest.",
+          "A renewal worker charges through Paystack and grants the next period only after verified success.",
+          "Failed, pending or abandoned charges grant no entitlement. Confirmed reversal/refund/chargeback revokes access."
+        ],
+        "confirmed_policy": [
+          "Turning auto-renew off preserves access through ends_at; any separate cancellation/refund behavior requires product approval.",
+          "Renewal policy: three total charge attempts, on the due date and then three and six days later; service access continues until the end of the seven-day grace period.",
+          "A unique patient/service database index allows only one pending checkout or active subscription at a time, preventing concurrent checkout requests from creating multiple payable purchases.",
+          "Recurring authorization is requested only when the patient opts in during checkout."
+        ]
+      },
+      "endpoints": [
+        {
+          "method": "POST", "path": "/api/user/me/provider-subscriptions", "summary": "Start checkout for one provider service", "availability": "mounted", "auth": "bearer", "roles": ["patient"],
+          "headers": {"Idempotency-Key": "unique client-generated key per purchase attempt"}, "content_type": "application/json",
+          "request": {"body": {"provider_service_id": "PROVIDER_SERVICE_ID", "auto_renew": false}},
+          "response": {"status": [200, 201], "data": {"id": "SUBSCRIPTION_ID", "provider_service_id": "PROVIDER_SERVICE_ID", "provider_profile_id": "PROVIDER_PROFILE_ID", "patient_profile_id": "PATIENT_PROFILE_ID", "status": "pending_payment", "auto_renew": false, "service": {"title": "Pregnancy care subscription", "original_price": 1500, "discount_percent": 10, "discounted_price": 1350, "currency": "NGN", "billing_cycle": "monthly"}, "payment": {"reference": "SERVER_GENERATED_REFERENCE", "status": "pending", "authorization_url": "PAYSTACK_HOSTED_CHECKOUT_URL", "access_code": "PAYSTACK_ACCESS_CODE"}}},
+          "notes": ["auto_renew defaults false; true is explicit consent.", "Do not accept provider_profile, patient_profile, price, discount or payment/subscription status from the client."]
+        },
+        {
+          "method": "GET", "path": "/api/user/me/provider-subscriptions", "summary": "List the authenticated patient's provider-service subscriptions", "availability": "mounted", "auth": "bearer", "roles": ["patient"],
+          "request": {"query_params": {"page": 1, "limit": 20, "status": "optional all|pending_payment|active|expired|revoked|payment_failed"}}, "response": {"status": 200, "data": "PAGINATED_PROVIDER_SERVICE_SUBSCRIPTIONS"}
+        },
+        {
+          "method": "GET", "path": "/api/user/me/provider-subscriptions/:subscriptionId", "summary": "Get one subscription owned by the authenticated patient", "availability": "mounted", "auth": "bearer", "roles": ["patient"],
+          "request": {"path_params": {"subscriptionId": "SUBSCRIPTION_ID"}}, "response": {"status": 200, "data": "PROVIDER_SERVICE_SUBSCRIPTION"}
+        },
+        {
+          "method": "PATCH", "path": "/api/user/me/provider-subscriptions/:subscriptionId/auto-renew", "summary": "Enable or disable future automatic renewal", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "content_type": "application/json",
+          "request": {"path_params": {"subscriptionId": "SUBSCRIPTION_ID"}, "body": {"enabled": false}},
+          "response": {"status": 200, "data": {"id": "SUBSCRIPTION_ID", "auto_renew": false, "ends_at": "ISO_DATETIME"}},
+          "notes": ["Disabling auto-renew does not shorten paid access.", "Enabling requires an approved reusable authorization; otherwise return conflict and require the authorization flow."]
+        },
+        {
+          "method": "POST", "path": "/api/user/me/provider-subscriptions/:subscriptionId/verify-payment", "summary": "Verify checkout after Paystack redirects the patient", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "content_type": "application/json",
+          "request": {"path_params": {"subscriptionId": "SUBSCRIPTION_ID"}, "body": {"reference": "SERVER_GENERATED_REFERENCE"}},
+          "response": {"status": 200, "data": {"subscription": "PROVIDER_SERVICE_SUBSCRIPTION", "payment_status": "pending|success|failed|reversed|refunded"}},
+          "notes": ["Reference must belong to the authenticated patient and subscription.", "The server verifies directly with Paystack; client callback data is not authoritative."]
+        },
+        {
+          "method": "POST", "path": "/api/payments/paystack/webhook", "summary": "Receive and durably enqueue Paystack events", "availability": "mounted", "auth": "Paystack signature", "content_type": "application/json",
+          "headers": {"x-paystack-signature": "HMAC-SHA512 signature of raw request body"}, "request": {"body": "Paystack event payload; raw bytes required for signature check"},
+          "response": {"status": 200, "data": {"received": true}},
+          "notes": ["Reject invalid signatures.", "Deduplicate event/transaction processing.", "Verify reference, amount, currency and purchase metadata before granting or renewing access."]
+        }
+      ],
+      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (schedule at least every few minutes).", "transaction_history": "Broader patient/admin/provider transaction APIs remain in roadmap phase 4N.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
     }
   ],
   "schemas": {

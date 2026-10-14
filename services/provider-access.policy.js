@@ -5,12 +5,13 @@ export const isProviderSubscriptionActive = (subscription, now = new Date()) => 
 
   const startsAt = new Date(subscription.starts_at);
   const endsAt = new Date(subscription.ends_at);
+  const graceEndsAt = subscription.renewal_grace_ends_at ? new Date(subscription.renewal_grace_ends_at) : null;
 
   return (
     !Number.isNaN(startsAt.getTime()) &&
     !Number.isNaN(endsAt.getTime()) &&
     startsAt <= now &&
-    endsAt > now
+    Boolean(endsAt > now || (graceEndsAt && !Number.isNaN(graceEndsAt.getTime()) && graceEndsAt > now))
   );
 };
 

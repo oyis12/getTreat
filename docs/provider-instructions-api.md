@@ -108,28 +108,15 @@ Authorization: Bearer {{provider_access_token}}
 
 ## 4. Subscription access prerequisite
 
-4K creates the minimum `ProviderSubscription` relationship record needed to enforce
-the UI's Active/Expired patient states. It does not add a subscription purchase,
-payment, renewal, or activation endpoint. Those trusted billing flows remain in 4M.
+4K's provider/patient access relationship is now created by the trusted 4M purchase
+workflow. A subscription references one specific `ProviderService`, and the server
+resolves provider and patient profiles from that service and the authenticated user.
+For a provider, any active service subscription to that provider appears in the patient
+roster; service purchase entitlement remains scoped to its specific service.
 
-For local Postman testing before 4M is implemented, create a fixture only in an
-isolated development/test database using MongoDB Compass's **Import JSON** (Extended
-JSON). Replace both IDs with the provider profile and patient profile IDs, and use a
-current start/end window:
-
-```json
-{
-  "provider_profile": { "$oid": "<provider-profile-id>" },
-  "patient_profile": { "$oid": "<patient-profile-id>" },
-  "status": "active",
-  "starts_at": { "$date": "2026-10-01T00:00:00.000Z" },
-  "ends_at": { "$date": "2026-11-01T00:00:00.000Z" }
-}
-```
-
-Import into the `providersubscriptions` collection. Never create or edit an active
-subscription fixture in a production database. The 4M server-side purchase workflow
-will become the normal source of these records.
+Do not manually import an active subscription fixture. Use the patient checkout route
+in [provider-subscriptions-4m-api.md](provider-subscriptions-4m-api.md) against an
+isolated non-production database and Paystack test keys.
 
 ## 5. Send an instruction and prescription
 
@@ -270,11 +257,11 @@ server-calculated discounted price, currency, and billing cadence.
 ## 8. Provider subscription and payment scope
 
 Provider subscription is separate from GetTreat's platform subscription. Provider
-screens show patient browsing/searching, provider subscription state, monthly price,
-and discount offers. Provider subscription purchase/payment/renewal and entitlements
-remain in the separate trusted workflow. No route here creates a provider subscription
-or charges a patient. The current `Service` catalogue and platform `System`
-subscription configuration are not provider offerings and remain separate.
+screens show patient browsing/searching, provider subscription state, provider service
+price, cadence, and discount offers. The 4M purchase, Paystack payment and renewal
+routes are documented in
+[provider-subscriptions-4m-api.md](provider-subscriptions-4m-api.md). The current
+`Service` catalogue and platform `System` subscription configuration remain separate.
 
 The registration screens also show a “Message GetTreat” action after rejection. The
 backend has no confirmed support-ticket/clarification API contract, so this action is

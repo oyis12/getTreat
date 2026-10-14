@@ -39,8 +39,11 @@ export const findActiveProviderSubscription = async (
     patient_profile: patientProfileId,
     status: "active",
     starts_at: { $lte: now },
-    ends_at: { $gt: now },
-  }).select("_id status starts_at ends_at");
+    $or: [
+      { ends_at: { $gt: now } },
+      { renewal_grace_ends_at: { $gt: now } },
+    ],
+  }).select("_id status starts_at ends_at renewal_grace_ends_at");
   assertActiveProviderSubscription(subscription, now);
   return subscription;
 };
@@ -161,7 +164,18 @@ export const listProviderPatients = async (
   const skip = (page - 1) * limit;
   const pipeline = [
     { $match: { provider_profile: providerProfile._id } },
-    { $sort: { starts_at: -1, createdAt: -1 } },
+    {
+      $addFields: {
+        _has_active_period: {
+          $and: [
+            { $eq: ["$status", "active"] },
+            { $lte: ["$starts_at", now] },
+            { $or: [{ $gt: ["$ends_at", now] }, { $gt: ["$renewal_grace_ends_at", now] }] },
+          ],
+        },
+      },
+    },
+    { $sort: { _has_active_period: -1, starts_at: -1, createdAt: -1 } },
     { $group: { _id: "$patient_profile", subscription: { $first: "$$ROOT" } } },
     {
       $addFields: {
@@ -171,7 +185,7 @@ export const listProviderPatients = async (
               $and: [
                 { $eq: ["$subscription.status", "active"] },
                 { $lte: ["$subscription.starts_at", now] },
-                { $gt: ["$subscription.ends_at", now] },
+                { $or: [{ $gt: ["$subscription.ends_at", now] }, { $gt: ["$subscription.renewal_grace_ends_at", now] }] },
               ],
             },
             "active",
@@ -213,7 +227,7 @@ export const listProviderPatients = async (
               profile_image: "$patient_profile.profileImage",
               subscription_status: 1,
               subscribed_at: "$subscription.starts_at",
-              expires_at: "$subscription.ends_at",
+              expires_at: { $cond: [{ $gt: ["$subscription.renewal_grace_ends_at", now] }, "$subscription.renewal_grace_ends_at", "$subscription.ends_at"] },
             },
           },
         ],

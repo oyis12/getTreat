@@ -12,6 +12,8 @@
     "seed:services": "node scripts/seed-services.js",
     "seed:health-conditions": "node scripts/seed-health-conditions.js",
     "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js",
+    "worker:provider-billing": "node scripts/run-provider-billing-worker.js",
+    "migrate:provider-billing-indexes": "node scripts/migrate-provider-billing-indexes.js",
     "migrate:baby-growth-history": "node scripts/migrate-baby-growth-history.js",
     "repair:baby-growth-baseline": "node scripts/repair-baby-growth-baseline.js"
   },

@@ -24,6 +24,7 @@ import adminProviderRoutes from "./routes/admin-provider.routes.js";
 import patientProviderInstructionRoutes from "./routes/patient-provider-instruction.routes.js";
 import providerDiscoveryRoutes from "./routes/provider-discovery.routes.js";
 import superAdminRoutes from "./routes/super-admin.routes.js";
+import providerSubscriptionRoutes, { paystackWebhookRouter } from "./routes/provider-subscription.routes.js";
 
 
 
@@ -58,7 +59,12 @@ configurePassport();
 app.use(passport.initialize());
 
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({
+  limit: '10kb',
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl.startsWith("/api/payments/paystack/webhook")) req.rawBody = Buffer.from(buffer);
+  },
+}));
 
 //Routes
 app.use("/api/auth", authRoutes);
@@ -75,6 +81,8 @@ app.use("/api/provider", providerRoutes);
 app.use("/api/providers", providerDiscoveryRoutes);
 app.use("/api/admin/providers", adminProviderRoutes);
 app.use("/api/super-admin", superAdminRoutes);
+app.use("/api/user/me/provider-subscriptions", providerSubscriptionRoutes);
+app.use("/api/payments", paystackWebhookRouter);
 app.use("/api/user/babies", babyProgressRoutes);
 app.use("/api/user/babies", babyRoutes);
 

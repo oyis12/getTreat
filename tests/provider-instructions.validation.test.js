@@ -173,8 +173,10 @@ test("provider profile model defaults to pending and keeps approval history attr
 test("provider subscription model requires a valid active/expired period", async () => {
   const valid = new ProviderSubscription({
     provider_profile: objectId,
+    provider_service: "507f1f77bcf86cd799439013",
     patient_profile: "507f1f77bcf86cd799439012",
     status: "active",
+    service_snapshot: { title: "Pregnancy care", original_price: 1500, discount_percent: 10, discounted_price: 1350, currency: "NGN", billing_cycle: "monthly" },
     starts_at: "2026-01-01T00:00:00.000Z",
     ends_at: "2026-02-01T00:00:00.000Z",
   });
@@ -182,8 +184,10 @@ test("provider subscription model requires a valid active/expired period", async
 
   const invalid = new ProviderSubscription({
     provider_profile: objectId,
+    provider_service: "507f1f77bcf86cd799439013",
     patient_profile: "507f1f77bcf86cd799439012",
     status: "active",
+    service_snapshot: { title: "Pregnancy care", original_price: 1500, discount_percent: 10, discounted_price: 1350, currency: "NGN", billing_cycle: "monthly" },
     starts_at: "2026-02-01T00:00:00.000Z",
     ends_at: "2026-01-01T00:00:00.000Z",
   });

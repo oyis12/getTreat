@@ -7,14 +7,15 @@
 
 ## 1. Exact continuation point
 
-**Current task: Admin and super-admin foundation, needed to test provider review.**
+**Current task: complete verification and prepare safe deployment/testing for 4M — Patient ↔ Provider Service Subscriptions and Paystack billing.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
 - **4K — Doctor's Instructions:** implemented, tests passing.
 - **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; medical license was added as a required credential in this work.
 - **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
-- **Next:** continue mapping/implementing the remaining 4R admin and super-admin domains before returning to **4M — Patient ↔ Provider Subscriptions/Services**. Keep provider subscriptions distinct from platform subscription (4O).
+- **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. Continue with isolated non-production integration checks, then proceed to **4N — Transactions**. Keep provider subscriptions distinct from platform subscription (4O).
+- **Next:** configure Paystack test credentials and a dedicated test MongoDB database, create/verify the new indexes, then test checkout, webhook, renewal, and reversal scenarios. Do not use the existing `.env` database URI for billing tests. 4N transaction history/refund administration is still outstanding.
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
 - The complete API reference JSON was generated as `getTreat-frontend-api-reference-2026-10-03-complete.json` and provided in the previous conversation.
@@ -22,7 +23,7 @@
 
 ### First instruction for the next AI
 
-> Continue GetTreat using this handoff. **4J Health Management, 4K Provider Instructions, and 4L provider registration/profile/approval and offering catalogue are implemented. 4R admin/super-admin foundations are in progress.** Verify the current code and tests before continuing the remaining admin domains. The current actors are `patient`, `provider` (including Medical Staff Admin/doctor provider), `admin` (Control Admin), and `super_admin`. Do not redo completed phases or invent clinical rules. Provider purchase, trusted payment confirmation, renewal, and subscription entitlement remain to be implemented after the needed admin workflows.
+> Continue GetTreat using this handoff. **4J Health Management, 4K Provider Instructions, 4L provider registration/profile/approval and offering catalogue, and the 4M provider-service billing implementation are present.** Verify current code and tests before proceeding. The current actors are `patient`, `provider` (including Medical Staff Admin/doctor provider), `admin` (Control Admin), and `super_admin`. Do not redo completed phases or invent clinical rules. Provider subscriptions and platform subscription (4O) are separate.
 
 ---
 
@@ -161,8 +162,8 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - 4K Doctor’s Instructions — **implemented and unit/model tested; subscription lifecycle integration continues in 4M**
 - **4L Provider registration/profile/approval — implemented and tested; provider offerings/discovery are also implemented as a 4M prerequisite. Medical license is now required for approval.**
 - **4R Admin/Super Admin foundation — initial super-admin bootstrap, Control Admin account management, explicit permission scopes, and admin OTP sign-in are implemented; remaining admin domains are outstanding.**
-- **4M Patient ↔ Provider Subscriptions/Services — pending until admin workflows needed for provider review/testing are complete; purchase/payment/renewal/entitlement are not implemented**
-- 4N Transactions — upcoming
+- **4M Patient ↔ Provider Subscriptions/Services — implemented and mounted; checkout, verified payment, idempotent webhook fulfillment, opt-in renewal, retry/grace policy and service entitlement are covered by offline tests. Paystack/MongoDB live integration remains to be tested in an isolated environment.**
+- **4N Transactions — next; patient/admin/provider history and transaction detail workflows remain upcoming.**
 - 4O Platform Subscription — upcoming
 - 4P Community — upcoming
 - 4Q Support — upcoming
@@ -575,9 +576,9 @@ existing `provider` role; do not introduce a separate doctor actor or role.
 - `ProviderProfile.user` links provider-specific profile/approval data to the central
   `User` identity. Provider profession choices match the exported registration UI.
 - Admin/super-admin review changes are recorded in the profile's approval history.
-- `ProviderSubscription` links a `ProviderProfile` to a `PatientProfile` and stores only
-  the active/expired access period required by 4K. It has no payment, price, renewal,
-  or public create/update endpoint. The trusted subscription lifecycle is 4M.
+- `ProviderSubscription` now links a `ProviderProfile`, `PatientProfile`, and exactly
+  one `ProviderService`; it stores the paid period, immutable price/cadence snapshot,
+  renewal policy state and trusted payment lifecycle implemented in 4M.
 - A provider must have an approved profile and a currently active provider subscription
   to list a patient's instruction history or send a new instruction.
 - Providers can list prior instructions in an active patient's history, as shown in
@@ -592,8 +593,9 @@ existing `provider` role; do not introduce a separate doctor actor or role.
   `tests/provider-instructions.*.test.js`.
 - Local MongoDB was unavailable (`mongod` is not installed). Do not inspect or reuse
   the project `.env` URI for test data; it may point to a shared/production database.
-  Postman write testing requires a dedicated non-production DB and an active
-  `ProviderSubscription` fixture until 4M creates subscriptions through its trusted flow.
+  Postman write testing requires a dedicated non-production DB. 4M creates
+  subscriptions through its trusted checkout/payment flow; do not insert manual active
+  fixtures or use the existing `.env` database URI for billing tests.
 
 ### 4L — Provider registration, approval, offerings (2026-10-14)
 
@@ -778,11 +780,11 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 1. Read this handoff completely.
 2. Have the user open the **current GetTreat project folder** in the new Codex account, or provide the latest ZIP if direct code inspection is needed.
 3. Inspect actual files before asserting route mounts/contracts.
-4. Confirm **4J/4K/4L implementation status** from current code and tests.
-5. Continue with provider subscriptions/payment/entitlements (4M), keeping platform
-   subscription access state (4O) separate.
+4. Confirm **4J/4K/4L/4M implementation status** from current code and tests.
+5. Run 4M's Paystack test-mode and dedicated-database integration checks, keeping
+   platform subscription access state (4O) separate; then continue to 4N Transactions.
 6. Report **already implemented / missing / uncertain**, then give a bounded implementation/test plan.
 7. Ask for clarification when clinical/product requirements are ambiguous.
 8. After every completed feature, update this handoff and API JSON.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, or completed provider registration/offering work. Continue at 4M.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. Continue with isolated 4M integration checks, then 4N Transactions.**

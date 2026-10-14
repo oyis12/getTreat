@@ -50,6 +50,17 @@ test("expired, future, and out-of-period subscriptions cannot authorize new inst
   }
 });
 
+test("an opted-in subscription keeps provider access during its renewal grace period", () => {
+  const grace = {
+    status: "active",
+    starts_at: "2026-09-01T00:00:00.000Z",
+    ends_at: "2026-10-10T00:00:00.000Z",
+    renewal_grace_ends_at: "2026-10-17T00:00:00.000Z",
+  };
+  assert.equal(isProviderSubscriptionActive(grace, now), true);
+  assert.equal(isProviderSubscriptionActive(grace, new Date("2026-10-17T00:00:00.000Z")), false);
+});
+
 test("only admin-approved provider profiles can use provider instruction features", () => {
   assert.doesNotThrow(() => assertApprovedProvider({ approval_status: "approved" }));
   for (const profile of [null, { approval_status: "pending" }, { approval_status: "rejected" }]) {
@@ -96,7 +107,7 @@ test("provider cannot create an instruction without an active provider subscript
   assert.equal(subscriptionFilter.patient_profile.toString(), patientProfileId.toString());
   assert.equal(subscriptionFilter.status, "active");
   assert.ok(subscriptionFilter.starts_at.$lte instanceof Date);
-  assert.ok(subscriptionFilter.ends_at.$gt instanceof Date);
+  assert.ok(subscriptionFilter.$or.some((filter) => filter.ends_at?.$gt instanceof Date));
   assert.equal(createInstruction.mock.callCount(), 0);
 });
 
