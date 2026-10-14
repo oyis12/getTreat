@@ -1,0 +1,7 @@
+import * as subscriptions from "../services/platform-subscription.service.js";
+import { sendSuccess } from "../utils/response.js";
+const userId = (req) => req.user?._id?.toString?.() ?? req.user?.id;
+export const startPlatformSubscription = async (req, res, next) => { try { const data = await subscriptions.startPlatformSubscription(userId(req), req.body.billing_cycle, req.autoRenew, req.idempotencyKey); return sendSuccess(res, { statusCode: data.reused ? 200 : 201, msg: data.reused ? "Platform subscription checkout retrieved successfully" : "Platform subscription checkout initialized successfully", data: data.subscription }); } catch (e) { next(e); } };
+export const getMyPlatformSubscription = async (req, res, next) => { try { return sendSuccess(res, { msg: "Platform subscription retrieved successfully", data: await subscriptions.getMyPlatformSubscription(userId(req)) }); } catch (e) { next(e); } };
+export const verifyMyPlatformSubscriptionPayment = async (req, res, next) => { try { return sendSuccess(res, { msg: "Platform subscription payment status retrieved successfully", data: await subscriptions.verifyMyPlatformSubscriptionPayment(userId(req), req.params.subscriptionId, req.body.reference) }); } catch (e) { next(e); } };
+export const setMyPlatformAutoRenew = async (req, res, next) => { try { return sendSuccess(res, { msg: "Platform subscription auto-renew preference updated successfully", data: await subscriptions.setPlatformAutoRenew(userId(req), req.params.subscriptionId, req.body.enabled) }); } catch (e) { next(e); } };

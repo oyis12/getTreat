@@ -9,15 +9,17 @@ const [{ connectDB, closeDB }, {
   import("../config/db.js"),
   import("../services/provider-subscription.service.js"),
 ]);
+const { runDuePlatformRenewals } = await import("../services/platform-subscription.service.js");
 const { runProviderBillingWorkerCycle } = await import("../services/provider-billing-worker.js");
 
 try {
   await connectDB();
-  const { webhookEvents, renewalAttempts } = await runProviderBillingWorkerCycle({
+  const { webhookEvents, renewalAttempts, platformRenewalAttempts } = await runProviderBillingWorkerCycle({
     processPendingPaystackWebhooks,
     runDueProviderRenewals,
+    runDuePlatformRenewals,
   });
-  console.log(`Provider billing worker completed: ${webhookEvents} webhook events, ${renewalAttempts} renewal attempts`);
+  console.log(`Billing worker completed: ${webhookEvents} webhook events, ${renewalAttempts} provider renewal attempts, ${platformRenewalAttempts} platform renewal attempts`);
   await closeDB();
 } catch (error) {
   console.error("Provider billing worker failed:", error.message);

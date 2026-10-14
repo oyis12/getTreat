@@ -1,0 +1,12 @@
+import express from "express";
+import { protect } from "../middlewares/auth.middleware.js";
+import { patientOnly } from "../middlewares/role.middleware.js";
+import { getMyPlatformSubscription, setMyPlatformAutoRenew, startPlatformSubscription, verifyMyPlatformSubscriptionPayment } from "../controllers/platform-subscription.controller.js";
+import { validatePlatformAutoRenew, validatePlatformPaymentVerification, validatePlatformSubscriptionId, validateStartPlatformSubscription } from "../validators/platform-subscription.validator.js";
+const router = express.Router();
+router.use(protect, patientOnly);
+router.get("/", getMyPlatformSubscription);
+router.post("/", validateStartPlatformSubscription, startPlatformSubscription);
+router.patch("/:subscriptionId/auto-renew", validatePlatformSubscriptionId, validatePlatformAutoRenew, setMyPlatformAutoRenew);
+router.post("/:subscriptionId/verify-payment", validatePlatformSubscriptionId, validatePlatformPaymentVerification, verifyMyPlatformSubscriptionPayment);
+export default router;

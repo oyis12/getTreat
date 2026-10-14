@@ -508,7 +508,7 @@ export const enqueuePaystackWebhook = async (rawBody, signature, body) => {
       event.processed_at = new Date();
       await event.save();
     } else if (["charge.success", "refund.processed", "refund.failed", "charge.dispute.create"].includes(eventType)) {
-      const { getAppointmentPaymentForWebhook, fulfillVerifiedAppointmentPayment, processAppointmentRefund } = await import("./appointment.service.js");
+      const { getAppointmentPaymentForWebhook, fulfillVerifiedAppointmentPayment, processAppointmentRefund, processAppointmentRefundFailure } = await import("./appointment.service.js");
       const appointmentAttempt = await getAppointmentPaymentForWebhook(reference);
       if (appointmentAttempt) {
         if (eventType === "charge.success") {
@@ -523,6 +523,14 @@ export const enqueuePaystackWebhook = async (rawBody, signature, body) => {
         event.processed_at = new Date();
         event.lock_expires_at = null;
         await event.save();
+      } else {
+        const { processPlatformWebhook } = await import("./platform-subscription.service.js");
+        if (await processPlatformWebhook(eventType, reference)) {
+          event.status = "processed";
+          event.processed_at = new Date();
+          event.lock_expires_at = null;
+          await event.save();
+        }
       }
     }
   }
@@ -561,14 +569,21 @@ export const processPendingPaystackWebhooks = async (limit = 100) => {
         const { getAppointmentPaymentForWebhook, fulfillVerifiedAppointmentPayment } = await import("./appointment.service.js");
         const appointmentAttempt = await getAppointmentPaymentForWebhook(reference);
         if (appointmentAttempt) await fulfillVerifiedAppointmentPayment(reference, payment);
-        else await fulfillVerifiedPayment(reference, payment);
+        else {
+          const { fulfillPlatformPayment } = await import("./platform-subscription.service.js");
+          if (!await fulfillPlatformPayment(reference, payment)) await fulfillVerifiedPayment(reference, payment);
+        }
         event.status = "processed";
       } else if (["refund.processed", "refund.failed", "charge.dispute.create"].includes(event.event_type) && reference) {
         const { processAppointmentRefund, processAppointmentRefundFailure } = await import("./appointment.service.js");
         const handled = event.event_type === "refund.failed"
           ? await processAppointmentRefundFailure(reference, event)
           : await processAppointmentRefund(reference, event.event_type);
-        if (!handled && event.event_type !== "refund.failed") await revokeSubscriptionForPayment(reference, event.event_type === "refund.processed" ? "refunded" : "reversed");
+        if (!handled) {
+          const { processPlatformWebhook } = await import("./platform-subscription.service.js");
+          const platformHandled = await processPlatformWebhook(event.event_type, reference);
+          if (!platformHandled && event.event_type !== "refund.failed") await revokeSubscriptionForPayment(reference, event.event_type === "refund.processed" ? "refunded" : "reversed");
+        }
         event.status = "processed";
       } else {
         event.status = "ignored";
@@ -594,6 +609,9 @@ const resolveWebhookReference = async (event) => {
   if (!event.gateway_transaction_id) return null;
   const attempt = await ProviderPaymentAttempt.findOne({ gateway_transaction_id: event.gateway_transaction_id }).select("reference");
   if (attempt) return attempt.reference;
+  const { default: PlatformPaymentAttempt } = await import("../models/platform-payment-attempt.model.js");
+  const platformAttempt = await PlatformPaymentAttempt.findOne({ gateway_transaction_id: event.gateway_transaction_id }).select("reference");
+  if (platformAttempt) return platformAttempt.reference;
   const { getAppointmentPaymentForWebhook } = await import("./appointment.service.js");
   const appointmentAttempt = await getAppointmentPaymentForWebhook(null, event.gateway_transaction_id);
   if (appointmentAttempt) return appointmentAttempt.reference;

@@ -15,6 +15,14 @@ export const getPlatformFinancialSettings = async (_req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const updatePlatformSubscriptionSettings = async (req, res, next) => {
+  try {
+    const actorId = req.user?._id?.toString?.() ?? req.user?.id;
+    const data = await systemService.updatePlatformSubscriptionSettings(req.body, actorId);
+    return sendSuccess(res, { msg: "Platform subscription settings updated successfully", data });
+  } catch (error) { next(error); }
+};
+
 export const updatePlatformFee = async (req, res, next) => {
   try {
     const actorId = req.user?._id?.toString?.() ?? req.user?.id;

@@ -9,15 +9,17 @@ import {
 
 import { protect } from "../middlewares/auth.middleware.js";
 import validatePregnancyPayload from "../validators/pregnancy.validator.js";
+import { requireActivePlatformSubscription } from "../middlewares/platform-subscription.middleware.js";
 
 const router = express.Router();
 
-router.get("/me/pregnancy", protect, getCurrentPregnancy);
-router.get("/me/pregnancies", protect, getPregnancyHistory);
+router.get("/me/pregnancy", protect, requireActivePlatformSubscription, getCurrentPregnancy);
+router.get("/me/pregnancies", protect, requireActivePlatformSubscription, getPregnancyHistory);
 
 router.post(
   "/me/pregnancy",
   protect,
+  requireActivePlatformSubscription,
   validatePregnancyPayload,
   createPregnancy
 );
@@ -25,6 +27,7 @@ router.post(
 router.patch(
   "/me/pregnancy",
   protect,
+  requireActivePlatformSubscription,
   validatePregnancyPayload,
   updateCurrentPregnancy
 );

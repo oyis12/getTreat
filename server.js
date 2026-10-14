@@ -30,6 +30,7 @@ import providerSubscriptionRoutes, { paystackWebhookRouter } from "./routes/prov
 import appointmentRoutes from "./routes/appointment.routes.js";
 import appointmentDiscoveryRoutes from "./routes/appointment-discovery.routes.js";
 import adminAppointmentRoutes from "./routes/admin-appointment.routes.js";
+import platformSubscriptionRoutes from "./routes/platform-subscription.routes.js";
 
 
 
@@ -74,6 +75,7 @@ app.use(express.json({
 //Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/user/me/platform-subscription", platformSubscriptionRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/health-conditions", healthConditionRoutes);
 app.use("/api/admin/health-conditions", adminHealthConditionRoutes);

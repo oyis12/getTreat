@@ -5,11 +5,14 @@ import { createAdmin, listAdmins, updateAdmin } from '../controllers/admin-manag
 import { validateAdminListQuery, validateCreateAdmin, validateUpdateAdmin } from '../validators/admin-management.validator.js';
 import { getPlatformFinancialSettings, updatePlatformFee } from '../controllers/system.controller.js';
 import { validatePlatformFeeUpdate } from '../validators/financial.validator.js';
+import { updatePlatformSubscriptionSettings } from '../controllers/system.controller.js';
+import { validatePlatformPlansUpdate } from '../validators/platform-subscription.validator.js';
 
 const router = express.Router();
 router.use(protect, superAdminOnly);
 router.get('/platform-financial-settings', getPlatformFinancialSettings);
 router.patch('/platform-financial-settings', validatePlatformFeeUpdate, updatePlatformFee);
+router.patch('/platform-subscription-settings', validatePlatformPlansUpdate, updatePlatformSubscriptionSettings);
 router.get('/admins', validateAdminListQuery, listAdmins);
 router.post('/admins', validateCreateAdmin, createAdmin);
 router.patch('/admins/:adminProfileId', validateUpdateAdmin, updateAdmin);

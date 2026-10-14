@@ -5,6 +5,25 @@
 
 ---
 
+## Latest implementation update — 4O platform subscriptions (2026-10-15)
+
+4O implements the patient's subscription to GetTreat as a separate domain from provider
+service subscriptions. Read `docs/platform-subscriptions-4o-api.md` for mounted route
+examples and Postman instructions. Supported plans are monthly, quarterly and yearly;
+development prices are ₦555, ₦1,500 and ₦5,500, respectively, editable by a super admin
+through `/api/super-admin/platform-subscription-settings`. Checkout snapshots the selected
+price, requires an `Idempotency-Key`, uses hosted Paystack checkout and verifies payment
+server-side. Optional auto-renew requires opt-in during checkout and a reusable Paystack
+authorization; GetTreat stores no card details. Confirmed refunds/disputes revoke access.
+Patient feature routes check current access and the seven-day renewal grace period, while
+account/profile/billing/transaction routes remain reachable when expired. Platform
+attempts appear in patient/admin history as `purpose=platform_subscription`.
+
+The existing one-shot provider billing worker now also processes platform renewal attempts;
+worker hosting remains paused at the user's request. Do not run the index migration or
+system seed against a remote database until its target is confirmed. Seed code preserves
+configured prices and fills only absent legacy plan data. Ads remain out of scope.
+
 ## 1. Exact continuation point
 
 **Current phase: 4N — Transactions, commission ledger, provider payouts and paid appointments. Provider-service billing and paid appointment booking/payment/refund paths are implemented. Staff appointment oversight and appointment-type administration await confirmation of the explicit admin permission boundary. The 4M worker deployment remains intentionally paused while development continues.**

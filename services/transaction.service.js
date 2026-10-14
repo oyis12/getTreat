@@ -4,6 +4,7 @@ import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
 import AppointmentPaymentAttempt from "../models/appointment-payment-attempt.model.js";
 import AuditLog from "../models/audit-log.model.js";
+import PlatformPaymentAttempt from "../models/platform-payment-attempt.model.js";
 import AppError from "../utils/AppError.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -76,8 +77,18 @@ export const serializeTransactionAttempt = (attempt, audience) => {
       status: attempt.appointment.status ?? null,
     } : null;
   }
+  if (attempt.purpose === "platform_subscription") {
+    result.provider_service = null;
+    result.provider_subscription_id = null;
+    result.product = "getreat_platform_subscription";
+    result.platform_subscription = attempt.platform_subscription ? {
+      id: idOf(attempt.platform_subscription._id),
+      billing_cycle: attempt.platform_subscription.plan_snapshot?.billing_cycle ?? null,
+      status: attempt.platform_subscription.status ?? null,
+    } : null;
+  }
 
-  if (audience === "provider" || audience === "admin") {
+  if ((audience === "provider" || audience === "admin") && attempt.purpose !== "platform_subscription") {
     result.commission_rate_percent = attempt.commission_rate_percent ?? 0;
     result.platform_fee_minor = attempt.platform_fee_kobo ?? 0;
     result.platform_fee = Number(((attempt.platform_fee_kobo ?? 0) / 100).toFixed(2));
@@ -102,8 +113,9 @@ export const serializeTransactionAttempt = (attempt, audience) => {
 };
 
 const paginateTransactions = async (scope, filters, audience) => {
-  const includeProviderPayments = filters.purpose !== "appointment";
+  const includeProviderPayments = !["appointment", "platform_subscription"].includes(filters.purpose);
   const includeAppointments = filters.purpose === "all" || filters.purpose === "appointment";
+  const includePlatformPayments = (!scope.provider_profile) && (filters.purpose === "all" || filters.purpose === "platform_subscription");
   const filter = buildTransactionFilter(scope, filters);
   const appointmentFilter = {
     ...(scope.patient_profile ? { patient_profile: scope.patient_profile } : {}),
@@ -114,7 +126,12 @@ const paginateTransactions = async (scope, filters, audience) => {
       { gateway_transaction_id: new RegExp(escapeRegex(filters.search), "i") },
     ] } : {}),
   };
-  const [providerDocuments, providerTotal, appointmentDocuments, appointmentTotal] = await Promise.all([
+  const platformFilter = {
+    ...(scope.patient_profile ? { patient_profile: scope.patient_profile } : {}),
+    ...(filters.status !== "all" ? { status: filters.status } : {}),
+    ...(filters.search ? { $or: [{ reference: new RegExp(escapeRegex(filters.search), "i") }, { gateway_transaction_id: new RegExp(escapeRegex(filters.search), "i") }] } : {}),
+  };
+  const [providerDocuments, providerTotal, appointmentDocuments, appointmentTotal, platformDocuments, platformTotal] = await Promise.all([
     includeProviderPayments ? populateTransaction(ProviderPaymentAttempt.find(filter).sort(transactionSort[filters.sort]).limit(filters.page * filters.limit)).lean() : [],
     includeProviderPayments ? ProviderPaymentAttempt.countDocuments(filter) : 0,
     includeAppointments ? AppointmentPaymentAttempt.find(appointmentFilter)
@@ -125,16 +142,19 @@ const paginateTransactions = async (scope, filters, audience) => {
       .populate({ path: "patient_profile", select: "user", populate: { path: "user", select: "fullname" } })
       .lean() : [],
     includeAppointments ? AppointmentPaymentAttempt.countDocuments(appointmentFilter) : 0,
+    includePlatformPayments ? PlatformPaymentAttempt.find(platformFilter).sort(transactionSort[filters.sort]).limit(filters.page * filters.limit).populate({ path: "platform_subscription", select: "plan_snapshot status" }).lean() : [],
+    includePlatformPayments ? PlatformPaymentAttempt.countDocuments(platformFilter) : 0,
   ]);
   const allDocuments = [
     ...providerDocuments,
     ...appointmentDocuments.map((document) => ({ ...document, purpose: "appointment" })),
+    ...platformDocuments.map((document) => ({ ...document, purpose: "platform_subscription" })),
   ].sort((a, b) => {
     if (filters.sort === "highest" || filters.sort === "lowest") return (a.amount_kobo - b.amount_kobo) * (filters.sort === "highest" ? -1 : 1);
     const direction = filters.sort === "oldest" ? 1 : -1;
     return (new Date(a.createdAt) - new Date(b.createdAt)) * direction;
   });
-  const total = providerTotal + appointmentTotal;
+  const total = providerTotal + appointmentTotal + platformTotal;
   const documents = allDocuments.slice((filters.page - 1) * filters.limit, filters.page * filters.limit);
   return {
     items: documents.map((document) => serializeTransactionAttempt(document, audience)),
@@ -163,6 +183,12 @@ const findTransaction = async (scope, transactionId, audience) => {
       .lean();
     resourceType = "appointment_payment_attempt";
     if (document) document.purpose = "appointment";
+  }
+  if (!document && !scope.provider_profile) {
+    document = await PlatformPaymentAttempt.findOne({ ...scope, _id: transactionId })
+      .populate({ path: "platform_subscription", select: "plan_snapshot status" }).lean();
+    if (document) document.purpose = "platform_subscription";
+    resourceType = "platform_payment_attempt";
   }
   if (!document) throw new AppError("Transaction not found", 404);
   const transaction = serializeTransactionAttempt(document, audience);

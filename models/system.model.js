@@ -11,7 +11,7 @@ const platformSubscriptionSchema = new Schema(
 
     billing_cycle: {
       type: String,
-      enum: ["monthly"],
+      enum: ["monthly", "quarterly", "yearly"],
       default: "monthly",
     },
 
@@ -19,6 +19,16 @@ const platformSubscriptionSchema = new Schema(
       type: Number,
       min: 0,
       default: null,
+    },
+
+    plans: {
+      type: [{
+        billing_cycle: { type: String, enum: ["monthly", "quarterly", "yearly"], required: true },
+        amount: { type: Number, min: 1, required: true },
+        currency: { type: String, enum: ["NGN"], default: "NGN", required: true },
+        active: { type: Boolean, default: true, required: true },
+      }],
+      validate: { validator: (plans) => new Set(plans.map((plan) => plan.billing_cycle)).size === plans.length, message: "Platform plan billing cycles must be unique" },
     },
 
     currency: {

@@ -1,5 +1,6 @@
 import express from "express";
 import { protect } from "../middlewares/auth.middleware.js";
+import { requireActivePlatformSubscription } from "../middlewares/platform-subscription.middleware.js";
 import { patientOnly } from "../middlewares/role.middleware.js";
 import {
   getMyProviderSubscription,
@@ -20,7 +21,7 @@ import {
 const router = express.Router();
 const webhookRouter = express.Router();
 
-router.use(protect, patientOnly);
+router.use(protect, patientOnly, requireActivePlatformSubscription);
 router.get("/", validateSubscriptionListQuery, listMyProviderSubscriptions);
 router.post("/", validateStartProviderSubscription, startProviderSubscription);
 router.get("/:subscriptionId", validateProviderSubscriptionId, getMyProviderSubscription);

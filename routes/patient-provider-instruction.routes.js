@@ -9,10 +9,11 @@ import {
   validatePaginationQuery,
   validateProviderInstructionId,
 } from "../validators/provider.validator.js";
+import { requireActivePlatformSubscription } from "../middlewares/platform-subscription.middleware.js";
 
 const router = express.Router();
 
-router.use(protect, patientOnly);
+router.use(protect, patientOnly, requireActivePlatformSubscription);
 router.get("/me/provider-instructions", validatePaginationQuery, listMyProviderInstructions);
 router.get(
   "/me/provider-instructions/:instructionId",

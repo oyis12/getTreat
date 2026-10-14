@@ -153,14 +153,15 @@ test("provider billing worker needs billing/database secrets but not API or Clou
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
-test("provider billing worker limits each scheduled cycle to one webhook and one renewal", async () => {
+test("billing worker limits each scheduled cycle to one webhook and each subscription renewal", async () => {
   const calls = [];
   const result = await runProviderBillingWorkerCycle({
     processPendingPaystackWebhooks: async (limit) => { calls.push(["webhooks", limit]); return 1; },
     runDueProviderRenewals: async (limit) => { calls.push(["renewals", limit]); return 0; },
+    runDuePlatformRenewals: async (limit) => { calls.push(["platform-renewals", limit]); return 1; },
   });
 
   assert.equal(PROVIDER_BILLING_BATCH_SIZE, 1);
-  assert.deepEqual(calls, [["webhooks", 1], ["renewals", 1]]);
-  assert.deepEqual(result, { webhookEvents: 1, renewalAttempts: 0 });
+  assert.deepEqual(calls, [["webhooks", 1], ["renewals", 1], ["platform-renewals", 1]]);
+  assert.deepEqual(result, { webhookEvents: 1, renewalAttempts: 0, platformRenewalAttempts: 1 });
 });

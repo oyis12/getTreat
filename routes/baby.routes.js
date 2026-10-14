@@ -18,12 +18,14 @@ import {
 
 import { protect } from "../middlewares/auth.middleware.js";
 import uploadBabyPhoto from "../middlewares/baby-photo-upload.middleware.js";
+import { requireActivePlatformSubscription } from "../middlewares/platform-subscription.middleware.js";
 
 const router = express.Router();
 
 router.post(
   "/",
   protect,
+  requireActivePlatformSubscription,
   validateCreateBaby,
   createBabyController
 );
@@ -31,12 +33,14 @@ router.post(
 router.get(
   "/",
   protect,
+  requireActivePlatformSubscription,
   getBabiesController
 );
 
 router.post(
   "/:babyId/photos",
   protect,
+  requireActivePlatformSubscription,
   uploadBabyPhoto,
   addBabyPhotoController
 );
@@ -44,12 +48,14 @@ router.post(
 router.delete(
   "/:babyId/photos/:photoId",
   protect,
+  requireActivePlatformSubscription,
   deleteBabyPhotoController
 );
 
 router.patch(
   "/:babyId/photos/:photoId",
   protect,
+  requireActivePlatformSubscription,
   uploadBabyPhoto,
   updateBabyPhotoController
 );
@@ -57,12 +63,14 @@ router.patch(
 router.get(
   "/:babyId",
   protect,
+  requireActivePlatformSubscription,
   getBabyController
 );
 
 router.patch(
   "/:babyId",
   protect,
+  requireActivePlatformSubscription,
   validateUpdateBaby,
   updateBabyController
 );
@@ -71,6 +79,7 @@ router.patch(
 router.delete(
   "/:babyId",
   protect,
+  requireActivePlatformSubscription,
   deleteBabyController
 );
 

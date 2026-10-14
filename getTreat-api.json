@@ -1,9 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-  "version": "2026-10-15-4N-appointments",
+  "version": "2026-10-15-4O-platform-subscriptions",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service billing, paid appointments, commission ledger, provider payouts, Paystack transfers, and transaction history.",
+    "purpose": "Frontend integration reference for mounted GetTreat APIs, including platform and provider subscriptions, paid appointments, commission ledger, provider payouts, Paystack transfers, and transaction history.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -47,7 +47,7 @@
       "4M patient-to-provider-service subscriptions and Paystack payment lifecycle",
       "4N transaction history, commission ledger and provider payouts",
       "4N paid provider appointments, availability and appointment refunds",
-      "4O platform subscription"
+      "4O platform subscription plans, Paystack checkout, entitlements and optional renewal"
     ],
     "route_mounts": {
       "/api/auth": "auth.routes.js",
@@ -70,6 +70,7 @@
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/user/me/platform-subscription": "platform-subscription.routes.js",
       "/api/appointments": "appointment-discovery.routes.js",
       "/api/user/me/appointments": "appointment.routes.js",
       "/api/provider/me/appointments and availability": "provider-appointment.routes.js via provider.routes.js",
@@ -104,6 +105,7 @@
       "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
       "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
+      "/api/user/me/platform-subscription": "platform-subscription.routes.js",
       "/api/appointments": "appointment-discovery.routes.js",
       "/api/user/me/appointments": "appointment.routes.js",
       "/api/provider/me/appointments and availability": "provider-appointment.routes.js via provider.routes.js",
@@ -113,7 +115,7 @@
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
-    "important_latest_codebase_note": "4N includes paid provider appointments with patient/provider APIs, provider availability, Paystack checkout and verification, commission snapshots, ledger credits/reversals, and transaction history; see docs/appointments-4n-api.md, docs/financial-4n-api.md, and docs/transactions-4n-api.md. Appointment types seed from the approved designs. Provider and platform shares are posted only after verified payment, and paid cancellations/provider declines request a full Paystack refund. Admin appointment review/type-management routes await confirmation of the staff permission boundary. The billing worker deployment remains paused; automatic queued webhook processing and 24-hour reminders require resuming a worker. Platform subscriptions remain separate in 4O. Ads are out of scope. Do not run the historical earnings backfill until the target database and applied rate are reviewed.",
+    "important_latest_codebase_note": "4N includes paid provider appointments with patient/provider APIs, provider availability, Paystack checkout and verification, commission snapshots, ledger credits/reversals, and transaction history; see docs/appointments-4n-api.md, docs/financial-4n-api.md, and docs/transactions-4n-api.md. 4O implements the separate patient-to-GetTreat platform subscription with monthly/quarterly/yearly plans, editable NGN prices, Paystack checkout/verification, optional renewal, entitlements and transaction history; see docs/platform-subscriptions-4o-api.md. The billing worker hosting remains paused; the code now handles platform renewals when that existing worker is resumed. Ads are out of scope. Do not run database migrations until the target database is confirmed.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -2191,11 +2193,11 @@
         "rules": ["Payment-attempt status is distinct from subscription entitlement status.", "Only currently persisted payment fields are returned; billing email, idempotency keys, access codes, authorization data and internal failure messages remain private.", "No payment state is changed by a history/detail read.", "Provider/admin views include the commission snapshot and provider net; patient views show the gross charge.", "Successful provider payments post provider and platform ledger entries; refund/reversal events reverse both shares."]
       },
       "endpoints": [
-        {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service and appointment payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service, appointment and platform payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment|platform_subscription", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/user/me/transactions/:transactionId", "summary": "Get one provider-service payment attempt owned by the authenticated patient", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PROVIDER"}},
         {"method": "GET", "path": "/api/provider/me/transactions", "summary": "List provider-service and appointment payment attempts for the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/provider/me/transactions/:transactionId", "summary": "Get one payment attempt tied to the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT"}},
-        {"method": "GET", "path": "/api/admin/transactions", "summary": "List platform provider-service and appointment payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/admin/transactions", "summary": "List platform provider-service, appointment and platform subscription attempts", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|refund_pending|refund_failed|reversed|refunded", "purpose": "all|initial|renewal|appointment|platform_subscription", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
         {"method": "GET", "path": "/api/admin/transactions/:transactionId", "summary": "Get one platform provider-service payment attempt", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT_AND_PROVIDER"}}
       ],
       "documentation": "docs/transactions-4n-api.md",
@@ -2203,6 +2205,27 @@
       "confirmed_product_direction": ["Ads are out of scope", "Platform subscription remains separate from provider-service subscriptions in 4O", "Owner-configurable commission currently targets 15 percent and is deducted from successful provider-service subscription and appointment earnings rather than added to patient charges", "Each checkout snapshots the commission rate at initialization", "Providers request withdrawals and admins process them to provider bank accounts using Paystack", "Payment lifecycle changes and sensitive actor actions require audit trails", "Appointments should be paid through GetTreat and represented in transaction history", "Refunds/reversals reverse provider and platform ledger shares; provider amounts already paid are recoverable against future earnings"],
       "payout_contract": "Implemented and mounted; see docs/financial-4n-api.md. Provider bank accounts are verified through Paystack, stored as recipient code plus masked account details, and support multiple methods with one default. Payout requests use provider-scoped Idempotency-Key, reserve available balance, and require manage_transactions for admin processing. Transfer status is reconciled from signed Paystack webhooks; OTP is never stored.",
       "open_product_decisions": []
+    },
+    {
+      "name": "4O GetTreat Platform Subscription",
+      "base_path": "/api/user/me/platform-subscription",
+      "description": "Patient subscription to GetTreat itself; separate from provider-service subscriptions. Includes monthly, quarterly and yearly Paystack plans, optional auto-renew, entitlement checks and patient/admin transaction history.",
+      "availability": "mounted",
+      "documentation": "docs/platform-subscriptions-4o-api.md",
+      "design_references": ["designs/patients_dashboard/Transactions/User Subscription to Getreat.png", "designs/patients_dashboard/Transactions/User subcription( to Getreat).png", "designs/patients_dashboard/Transactions/Patients Transactions History.png", "designs/patients_dashboard/Transactions/Transaction history.png", "designs/patients_dashboard/Transactions/Transaction details.png"],
+      "confirmed_rules": ["Default prices are development placeholders: ₦555 monthly, ₦1,500 quarterly, ₦5,500 yearly; super admin can update them.", "Checkout snapshots plan cadence and amount; later settings changes affect future purchases only.", "Auto-renew is optional and requires explicit opt-in during checkout; only a Paystack reusable authorization is retained, encrypted at rest. No card numbers/CVV/expiry are stored.", "Successful payment activates access only after Paystack verification. A confirmed refund or dispute revokes access.", "Patients retain access through a seven-day renewal grace period; three total renewal attempts are made on expiry day and days three and six.", "Account, profile, subscription purchase/status, and transaction history remain available without an active subscription; subscription-gated patient features require active access.", "Provider subscriptions, commission earnings and provider payout ledger are separate domains; platform subscription revenue is not provider earnings.", "The existing billing worker remains paused in hosting; code supports processing platform renewals after it is intentionally resumed."] ,
+      "endpoints": [
+        {"method":"GET","path":"/api/system/subscriptions","summary":"List public GetTreat platform plans","availability":"mounted","auth":"none","response":{"status":200,"data":{"enabled":true,"billing_cycle":"monthly","amount":555,"currency":"NGN","plans":[{"billing_cycle":"monthly","amount":555,"currency":"NGN","active":true},{"billing_cycle":"quarterly","amount":1500,"currency":"NGN","active":true},{"billing_cycle":"yearly","amount":5500,"currency":"NGN","active":true}]}}},
+        {"method":"PATCH","path":"/api/super-admin/platform-subscription-settings","summary":"Update platform plan availability and prices","availability":"mounted","auth":"bearer","roles":["super_admin"],"request":{"body":{"enabled":true,"plans":[{"billing_cycle":"monthly","amount":555,"active":true},{"billing_cycle":"quarterly","amount":1500,"active":true},{"billing_cycle":"yearly","amount":5500,"active":true}]}},"response":{"status":200,"data":"UPDATED_PLATFORM_SUBSCRIPTION_SETTINGS"}},
+        {"method":"GET","path":"/api/user/me/platform-subscription","summary":"Get current platform subscription and recent history","availability":"mounted","auth":"bearer","roles":["patient"],"response":{"status":200,"data":{"current":"ACTIVE_PLATFORM_SUBSCRIPTION|null","items":"RECENT_PLATFORM_SUBSCRIPTIONS"}}},
+        {"method":"POST","path":"/api/user/me/platform-subscription","summary":"Start idempotent Paystack checkout for GetTreat access","availability":"mounted","auth":"bearer","roles":["patient"],"headers":{"Idempotency-Key":"unique key for this intended checkout"},"request":{"body":{"billing_cycle":"monthly|quarterly|yearly","auto_renew":false}},"response":{"status":[200,201],"data":{"id":"PLATFORM_SUBSCRIPTION_ID","status":"pending_payment","plan":{"billing_cycle":"monthly","amount":555,"currency":"NGN"},"payment":{"reference":"SERVER_REFERENCE","authorization_url":"PAYSTACK_HOSTED_CHECKOUT_URL"}}}},
+        {"method":"POST","path":"/api/user/me/platform-subscription/:subscriptionId/verify-payment","summary":"Verify checkout directly with Paystack","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"reference":"SERVER_REFERENCE"}},"response":{"status":200,"data":{"payment_status":"success|pending|failed|reversed|refunded","subscription":"PLATFORM_SUBSCRIPTION"}}},
+        {"method":"PATCH","path":"/api/user/me/platform-subscription/:subscriptionId/auto-renew","summary":"Enable or disable renewal for the owned platform subscription","availability":"mounted","auth":"bearer","roles":["patient"],"request":{"body":{"enabled":false}},"response":{"status":200,"data":"PLATFORM_SUBSCRIPTION"}},
+        {"method":"POST","path":"/api/payments/paystack/webhook","summary":"Receive signed Paystack events for platform and other payment domains","availability":"mounted","auth":"x-paystack-signature HMAC-SHA512","headers":{"x-paystack-signature":"signature of raw request bytes"},"response":{"status":200,"data":{"received":true}}}
+      ],
+      "super_admin_pricing": {"path":"/api/super-admin/platform-subscription-settings","auth":"super_admin bearer","audit_logged":true,"limits":"All three unique cadence plans required; NGN amount between 1 and 100000000."},
+      "transaction_history": "Platform attempts appear for patients and admins with purpose=platform_subscription; excluded from provider history. Use GET /api/user/me/transactions?purpose=platform_subscription.",
+      "index_migration": "CREATE_PLATFORM_SUBSCRIPTION_INDEXES=true npm run migrate:platform-subscription-indexes"
     }
   ],
   "schemas": {

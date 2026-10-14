@@ -4,6 +4,7 @@ import PatientProfile from "../models/patient-profile.model.js";
 import ProviderProfile from "../models/provider-profile.model.js";
 import ProviderPaymentAttempt from "../models/provider-payment-attempt.model.js";
 import AppointmentPaymentAttempt from "../models/appointment-payment-attempt.model.js";
+import PlatformPaymentAttempt from "../models/platform-payment-attempt.model.js";
 import AdminProfile from "../models/admin-profile.model.js";
 import { requireAdminPermission } from "../middlewares/admin-permission.middleware.js";
 import {
@@ -118,6 +119,8 @@ test("patient transaction listing is scoped to their resolved profile and pagina
     appointment: { _id: "507f1f77bcf86cd799439019", appointment_type_snapshot: { name: "Consultation" }, starts_at: new Date("2026-11-01T10:00:00Z"), status: "pending" },
   }]));
   t.mock.method(AppointmentPaymentAttempt, "countDocuments", async () => 1);
+  t.mock.method(PlatformPaymentAttempt, "find", () => queryChain([]));
+  t.mock.method(PlatformPaymentAttempt, "countDocuments", async () => 0);
 
   const result = await listPatientTransactions(patientUserId, {
     page: 2, limit: 10, status: "pending", purpose: "renewal", sort: "oldest", search: "gt4m",
@@ -158,6 +161,8 @@ test("admin transaction listing merges appointment transactions with provider-se
     appointment: { _id: "507f1f77bcf86cd799439019", appointment_type_snapshot: { name: "Consultation" }, starts_at: new Date("2026-11-01T10:00:00Z"), status: "pending" },
   }]));
   t.mock.method(AppointmentPaymentAttempt, "countDocuments", async () => 1);
+  t.mock.method(PlatformPaymentAttempt, "find", () => queryChain([]));
+  t.mock.method(PlatformPaymentAttempt, "countDocuments", async () => 0);
 
   const result = await listAdminTransactions({
     page: 1, limit: 20, status: "all", purpose: "all", sort: "newest", search: "",
@@ -183,6 +188,18 @@ test("appointment transaction serialization exposes appointment and commission f
   assert.equal(row.patient.fullname, "Patient Jane");
   assert.equal(row.provider.fullname, "Doctor Doe");
   assert.equal(row.provider_service, null);
+});
+
+test("platform transaction serialization does not misstate platform revenue as provider earnings", () => {
+  const row = serializeTransactionAttempt({
+    _id: transactionId, reference: "gt4o-reference", status: "success", purpose: "platform_subscription",
+    amount_kobo: 55500, currency: "NGN", createdAt: new Date("2026-10-15T10:00:00Z"),
+    platform_subscription: { _id: transactionId, plan_snapshot: { billing_cycle: "monthly" }, status: "active" },
+  }, "admin");
+  assert.equal(row.product, "getreat_platform_subscription");
+  assert.equal(row.platform_subscription.billing_cycle, "monthly");
+  assert.equal("provider_net" in row, false);
+  assert.equal("platform_fee" in row, false);
 });
 
 test("admin transaction access requires manage_transactions while super admin bypasses it", async (t) => {
