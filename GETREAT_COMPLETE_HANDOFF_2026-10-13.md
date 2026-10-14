@@ -7,15 +7,15 @@
 
 ## 1. Exact continuation point
 
-**Current task: deploy and verify the prepared Render Cron Job for 4M — Patient ↔ Provider Service Subscriptions and Paystack billing.**
+**Current next phase: 4N — Transactions. The 4M worker deployment is intentionally paused while the user continues development.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
 - **4K — Doctor's Instructions:** implemented, tests passing.
 - **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; medical license was added as a required credential in this work.
 - **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
-- **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. Continue with isolated non-production integration checks, then proceed to **4N — Transactions**. Keep provider subscriptions distinct from platform subscription (4O).
-- **Next:** create the `gettreat-provider-billing` service from `render.yaml` after signing into Render, provide its environment secrets directly in Render, and verify that it processes the user's queued webhook. The user authorized up to $2/month; current configuration runs every ten minutes with a one-item batch and has an estimated cost below that amount under normal runtime. Render does not hard-cap Cron runtime spending. 4N transaction history/refund administration remains outstanding.
+- **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. The one-shot worker, minimal environment configuration, ten-minute Render Cron definition, one-item batch limit, tests, and deployment guide are implemented and pushed in commit `775d74a`. The user asked to pause worker hosting while development continues. No Cron service creation or successful hosted-worker run has been confirmed; because the repository push could sync an existing Render Blueprint, inspect the Render dashboard before assuming it is absent or inactive. Resume by checking/suspending any auto-synced service first, then add secrets directly in Render and verify the queued webhook. The user authorized up to $2/month, but Render does not hard-cap Cron runtime spending. Keep provider subscriptions distinct from platform subscription (4O).
+- **Next:** begin **4N — Transactions** by mapping the patient, provider, Control Admin, and Super Admin transaction exports against the existing `ProviderPaymentAttempt`, subscription, and webhook records. Start with transaction history/details supported by persisted payment attempts. Separate or defer platform-subscription records (4O), and do not assume appointments, wallets, withdrawals, provider payouts, platform fees/commissions, refund behavior, or other transaction types until their entities and business rules are confirmed. 4N implementation has not started.
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
 - The complete API reference JSON was generated as `getTreat-frontend-api-reference-2026-10-03-complete.json` and provided in the previous conversation.
@@ -163,8 +163,8 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - **4L Provider registration/profile/approval — implemented and tested; provider offerings/discovery are also implemented as a 4M prerequisite. Medical license is now required for approval.**
 - **4R Admin/Super Admin foundation — initial super-admin bootstrap, Control Admin account management, explicit permission scopes, and admin OTP sign-in are implemented; remaining admin domains are outstanding.**
 - **4M Patient ↔ Provider Subscriptions/Services — implemented and mounted; checkout, verified payment, idempotent webhook fulfillment, opt-in renewal, retry/grace policy and service entitlement are covered by offline tests. Paystack/MongoDB live integration remains to be tested in an isolated environment.**
-- Render Cron configuration is prepared in `render.yaml` with deployment steps in `docs/render-provider-billing-cron.md`; the service has not been created because Render authentication and direct entry of secrets are required.
-- **4N Transactions — next; patient/admin/provider history and transaction detail workflows remain upcoming.**
+- Render worker implementation/configuration is prepared and pushed (`775d74a`). Hosted worker deployment is intentionally paused at the user's request. Whether the push caused a Render Blueprint sync is unverified; check the Render dashboard before resuming. Deployment instructions and cost estimate are in `docs/render-provider-billing-cron.md`.
+- **4N Transactions — next; patient/provider/admin transaction history and details remain upcoming. Map approved transaction types and role access before implementation.**
 - 4O Platform Subscription — upcoming
 - 4P Community — upcoming
 - 4Q Support — upcoming
@@ -782,11 +782,14 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 2. Have the user open the **current GetTreat project folder** in the new Codex account, or provide the latest ZIP if direct code inspection is needed.
 3. Inspect actual files before asserting route mounts/contracts.
 4. Confirm **4J/4K/4L/4M implementation status** from current code and tests.
-5. Deploy and verify the 4M Render Cron Job after the user signs into Render and
-   enters its secrets, keeping platform subscription access state (4O) separate;
-   then continue to 4N Transactions.
-6. Report **already implemented / missing / uncertain**, then give a bounded implementation/test plan.
-7. Ask for clarification when clinical/product requirements are ambiguous.
-8. After every completed feature, update this handoff and API JSON.
+5. Worker hosting is paused while the user continues development. When explicitly
+   resumed, first inspect Render for an auto-synced Cron service before creating or
+   activating anything; keep platform subscription access state (4O) separate.
+6. Continue with 4N Transactions: inspect all relevant patient/provider/admin designs,
+   map their supported transaction types to existing payment records, define actor
+   access and detail fields, and clarify fee/refund/payout rules before implementing.
+7. Report **already implemented / missing / uncertain**, then give a bounded implementation/test plan.
+8. Ask for clarification when clinical/product requirements are ambiguous.
+9. After every completed feature, update this handoff and API JSON.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. Deploy the prepared Render Cron Job after authenticated access and direct secret entry, verify it processes the queued webhook, then continue to 4N Transactions.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation. The next development phase is 4N Transactions, beginning with design/API/entity mapping and confirmation of unsupported transaction types and financial rules.**
