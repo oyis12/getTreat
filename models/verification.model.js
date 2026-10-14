@@ -29,6 +29,7 @@ const verificationSchema = new Schema(
         values: [
           "email_verification",
           "password_reset",
+          "admin_login_2fa",
         ],
         message: "Invalid verification type",
       },

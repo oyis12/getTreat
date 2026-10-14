@@ -20,7 +20,6 @@ const authSchema = new Schema(
 
         googleId: {
           type: String,
-          default: null,
           trim: true,
         },
       },
@@ -77,7 +76,6 @@ const userSchema = new Schema(
 
           google: {
             enabled: false,
-            googleId: null,
           },
         },
       }),
@@ -140,7 +138,9 @@ userSchema.index(
   { "auth.providers.google.googleId": 1 },
   {
     unique: true,
-    sparse: true,
+    partialFilterExpression: {
+      "auth.providers.google.googleId": { $type: "string" },
+    },
   }
 );
 

@@ -3,7 +3,7 @@
     "name": "GetTreat Frontend API Reference",
     "version": "2026-10-03",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Complete frontend integration reference for the current GetTreat backend, including Authentication, Patient Dashboard, Pregnancy, Health Conditions, Health Assessments, Pregnancy Health Conditions, My Baby, My Vitals, My Baby Progress, Services, System Configuration, and Admin Health Conditions.",
+    "purpose": "Frontend integration reference for the current GetTreat backend, including patient health domains, provider registration/offerings/instructions, admin permissions, and super-admin account management.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -42,7 +42,8 @@
       "My Vitals",
       "My Baby Progress",
       "Service catalogue/system configuration",
-      "Admin health-condition management"
+      "Admin health-condition management",
+      "Super Admin account management and admin authentication"
     ],
     "route_mounts": {
       "/api/auth": "auth.routes.js",
@@ -50,6 +51,7 @@
       "/api/services": "service.routes.js",
       "/api/health-conditions": "health-condition.routes.js",
       "/api/admin/health-conditions": "admin-health-condition.routes.js",
+      "/api/super-admin": "super-admin.routes.js",
       "/api/system": "system.routes.js",
       "/api/user (pregnancy)": "pregnancy.routes.js",
       "/api/user (health assessments)": "health-assessment.routes.js",
@@ -72,6 +74,7 @@
       "/api/services": "service.routes.js",
       "/api/health-conditions": "health-condition.routes.js",
       "/api/admin/health-conditions": "admin-health-condition.routes.js",
+      "/api/super-admin": "super-admin.routes.js",
       "/api/system": "system.routes.js",
       "/api/user (pregnancy)": "pregnancy.routes.js",
       "/api/user (health assessments)": "health-assessment.routes.js",
@@ -81,7 +84,7 @@
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. The Vitals router is part of the current working patient API after the validator fix.",
-    "important_latest_codebase_note": "This is the complete frontend API reference. Vitals endpoints are included as active patient APIs because the current working implementation has the Vitals router available and the validateRecordVital/validateUpdateVital validator exports have been restored.",
+    "important_latest_codebase_note": "This reference includes initial Super Admin account management and admin 2FA routes. Provider approval requires manage_providers for admins; admin health-condition management requires manage_assessments. Provider registration requires higher institution certificate, NYSC certificate/exemption, and medical license.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -168,6 +171,7 @@
               "refresh_token": "REFRESH_TOKEN"
             }
           },
+          "notes": ["Patient/provider signin returns tokens immediately after successful password signin. Admin/super_admin signin instead returns requires_2fa=true and issues no tokens until POST /api/auth/admin/2fa/verify succeeds."],
           "common_errors": [
             401,
             403
@@ -1638,7 +1642,8 @@
               "professional_data_consent": "true",
               "profile_image": "Optional JPG/PNG file, max 8MB",
               "higher_institution_certificate": "Required JPG/PNG/PDF file, max 8MB",
-              "nysc_certificate": "Required certificate or exemption JPG/PNG/PDF file, max 8MB"
+              "nysc_certificate": "Required certificate or exemption JPG/PNG/PDF file, max 8MB",
+              "medical_license": "Required JPG/PNG/PDF file, max 8MB"
             },
             "note": "Credential files use authenticated Cloudinary delivery; response links expire after 10 minutes."
           },
@@ -1935,6 +1940,63 @@
         "provider_designs": "designs/providers ui/patients/2.2.0 Add instruction for patients and Patients Instructions screens",
         "verified": true
       },
+      "availability": "mounted"
+    },
+    {
+      "name": "Super Admin account management and admin authentication",
+      "base_path": "/api/super-admin/admins",
+      "description": "Super-admin-only Control Admin account management, explicit permission scopes, and email OTP verification for admin sign-in.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/super-admin/admins",
+          "summary": "Create a Control Admin account",
+          "auth": "bearer",
+          "roles": ["super_admin"],
+          "content_type": "application/json",
+          "request": {"body": {"fullname": "string", "email": "string", "password": "string (minimum 8 characters)", "permissions": "object of explicit boolean scopes"}},
+          "response": {"status": 201, "data": "ADMIN_PROFILE_WITH_USER"},
+          "notes": ["Role is assigned server-side as admin; role is not accepted in the request.", "The new admin must verify their email before signing in."]
+        },
+        {
+          "method": "GET",
+          "path": "/api/super-admin/admins?page=1&limit=20&search=",
+          "summary": "List Control Admin accounts",
+          "auth": "bearer",
+          "roles": ["super_admin"],
+          "response": {"status": 200, "data": "PAGINATED_ADMIN_PROFILES"}
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/super-admin/admins/:adminProfileId",
+          "summary": "Update admin permission scopes or account status",
+          "auth": "bearer",
+          "roles": ["super_admin"],
+          "content_type": "application/json",
+          "request": {"path_params": {"adminProfileId": "ADMIN_PROFILE_ID"}, "body": {"permissions": "optional object of boolean scopes", "account_status": "optional active|suspended|deactivated"}},
+          "response": {"status": 200, "data": "ADMIN_PROFILE_WITH_USER"}
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/admin/2fa/verify",
+          "summary": "Complete admin sign-in with a one-time email code",
+          "auth": "public challenge",
+          "content_type": "application/json",
+          "request": {"body": {"email": "string", "code": "6 digit string"}},
+          "response": {"status": 200, "data": {"user": "SANITIZED_USER", "access_token": "ACCESS_TOKEN", "refresh_token": "REFRESH_TOKEN"}},
+          "common_errors": [400, 401, 429]
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/admin/2fa/resend",
+          "summary": "Resend the admin sign-in code",
+          "auth": "public challenge",
+          "content_type": "application/json",
+          "request": {"body": {"email": "string"}},
+          "response": {"status": 200, "data": {"accepted": true}},
+          "notes": ["Code resend is limited to once per minute."]
+        }
+      ],
       "availability": "mounted"
     }
   ],
@@ -2358,6 +2420,7 @@
       "id": "PROVIDER_PROFILE_ID",
       "user": "USER_ID",
       "professional_field": "gynecology|physiotherapist|food_nutrition|others",
+      "credentials": ["higher_institution_certificate", "nysc_certificate", "medical_license"],
       "approval_status": "pending|approved|rejected",
       "submitted_at": "ISO_DATETIME",
       "approval_history": [

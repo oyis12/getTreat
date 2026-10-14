@@ -72,7 +72,6 @@ export const configurePassport = () => {
               providers: {
                 local: {
                   enabled: false,
-                  googleId: null,
                 },
 
                 google: {

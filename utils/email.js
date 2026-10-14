@@ -134,6 +134,13 @@ GetTreat Team
   });
 };
 
+export const sendAdminLoginCode = async ({ email, fullname, code }) => {
+  const subject = 'GetTreat admin sign-in verification';
+  const text = `Hello ${fullname || 'there'},\n\nYour GetTreat admin sign-in code is ${code}. It expires in ${env.verificationCodeExpiresMinutes} minutes. If you did not attempt to sign in, secure your account immediately.\n\nGetTreat Team`;
+  const html = `<p>Hello ${fullname || 'there'},</p><p>Your GetTreat admin sign-in verification code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p><p>This code expires in ${env.verificationCodeExpiresMinutes} minutes.</p><p>If you did not attempt to sign in, secure your account immediately.</p><p>GetTreat Team</p>`;
+  return sendEmail({ to: email, subject, html, text, developmentCode: code });
+};
+
 export const sendPasswordResetEmail = async ({
   email,
   fullname,

@@ -4,6 +4,8 @@ import passport from "passport";
 import {
   signup,
   signin,
+  verifyAdmin2FA,
+  resendAdmin2FA,
   verify,
   resend,
   forgotPassword,
@@ -45,6 +47,9 @@ router.post(
   validate,
   signin
 );
+
+router.post("/admin/2fa/verify", verifyValidator, validate, verifyAdmin2FA);
+router.post("/admin/2fa/resend", resendValidator, validate, resendAdmin2FA);
 
 router.post(
   "/verify",

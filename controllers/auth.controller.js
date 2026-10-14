@@ -36,6 +36,20 @@ export const signin = async (req, res, next) => {
   }
 };
 
+export const verifyAdmin2FA = async (req, res, next) => {
+  try {
+    const data = await authService.verifyAdminLoginCode(req.body.email, req.body.code, req);
+    return sendSuccess(res, { statusCode: 200, msg: 'Admin sign-in verified successfully', data });
+  } catch (error) { next(error); }
+};
+
+export const resendAdmin2FA = async (req, res, next) => {
+  try {
+    const data = await authService.resendAdminLoginCode(req.body.email);
+    return sendSuccess(res, { statusCode: 200, msg: 'If the account is eligible, a new sign-in code has been sent', data });
+  } catch (error) { next(error); }
+};
+
 export const verify = async (req, res, next) => {
   try {
     const data = await authService.verifyEmail(

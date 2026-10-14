@@ -7,13 +7,14 @@
 
 ## 1. Exact continuation point
 
-**Current task: Provider domain implementation.**
+**Current task: Admin and super-admin foundation, needed to test provider review.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
 - **4K — Doctor's Instructions:** implemented, tests passing.
-- **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; automated tests pass.
-- **Next:** continue with **4M — Patient ↔ Provider Subscriptions/Services**, implementing trusted purchase/payment/renewal and entitlement lifecycle. Keep it distinct from platform subscription (4O).
+- **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; medical license was added as a required credential in this work.
+- **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
+- **Next:** continue mapping/implementing the remaining 4R admin and super-admin domains before returning to **4M — Patient ↔ Provider Subscriptions/Services**. Keep provider subscriptions distinct from platform subscription (4O).
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
 - The complete API reference JSON was generated as `getTreat-frontend-api-reference-2026-10-03-complete.json` and provided in the previous conversation.
@@ -21,7 +22,7 @@
 
 ### First instruction for the next AI
 
-> Continue GetTreat using this handoff. **4J Health Management, 4K Provider Instructions, and the 4L provider registration/profile/approval and offering catalogue are implemented.** Verify the current code and tests before continuing with **4M — Patient ↔ Provider Subscriptions/Services**. Do not redo completed phases or invent clinical rules. Provider purchase, trusted payment confirmation, renewal, and subscription entitlement remain to be implemented.
+> Continue GetTreat using this handoff. **4J Health Management, 4K Provider Instructions, and 4L provider registration/profile/approval and offering catalogue are implemented. 4R admin/super-admin foundations are in progress.** Verify the current code and tests before continuing the remaining admin domains. The current actors are `patient`, `provider` (including Medical Staff Admin/doctor provider), `admin` (Control Admin), and `super_admin`. Do not redo completed phases or invent clinical rules. Provider purchase, trusted payment confirmation, renewal, and subscription entitlement remain to be implemented after the needed admin workflows.
 
 ---
 
@@ -158,13 +159,14 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - 4I My Baby Progress — **complete and tested**
 - 4J Health Management — **implemented and tested; clinical scoring remains deferred TODO**
 - 4K Doctor’s Instructions — **implemented and unit/model tested; subscription lifecycle integration continues in 4M**
-- **4L Provider registration/profile/approval — implemented and tested; provider offerings/discovery are also implemented as a 4M prerequisite**
-- **4M Patient ↔ Provider Subscriptions/Services — next; purchase/payment/renewal/entitlement are not implemented**
+- **4L Provider registration/profile/approval — implemented and tested; provider offerings/discovery are also implemented as a 4M prerequisite. Medical license is now required for approval.**
+- **4R Admin/Super Admin foundation — initial super-admin bootstrap, Control Admin account management, explicit permission scopes, and admin OTP sign-in are implemented; remaining admin domains are outstanding.**
+- **4M Patient ↔ Provider Subscriptions/Services — pending until admin workflows needed for provider review/testing are complete; purchase/payment/renewal/entitlement are not implemented**
 - 4N Transactions — upcoming
 - 4O Platform Subscription — upcoming
 - 4P Community — upcoming
 - 4Q Support — upcoming
-- 4R Admin — upcoming
+- 4R Admin — foundation implemented; broader admin and super-admin workflows upcoming
 - Phase 5 production hardening — upcoming
 
 **Numbering collision:** The historical roadmap uses `4G` for more than one feature group. Do not casually renumber completed work.
@@ -598,12 +600,13 @@ existing `provider` role; do not introduce a separate doctor actor or role.
 - Provider registration now stores professional field and optional "Others" label, years
   of experience, bio (300 characters), country/state/address, optional profile image,
   three explicit consents with acceptance timestamp, and credential metadata.
-- The registration screen's Higher Institution Certificate and NYSC Certificate/Letter
-  of Exemption are represented as separate required credentials before admin approval.
+- Higher Institution Certificate, NYSC Certificate/Letter of Exemption, and Medical
+  License are required credentials before admin approval, following the exported admin
+  application screen and the user's explicit medical-license requirement.
   Profile photos accept JPG/PNG; credentials accept JPG/PNG/PDF, max 8MB each.
 - Provider credential assets are uploaded to Cloudinary using authenticated delivery.
   API responses create signed download URLs with a 10-minute expiry; do not log/share.
-- Admin approval is blocked until registration fields, consent, and both credential
+- Admin approval is blocked until registration fields, consent, and all three credential
   types exist. Updating core registration/profile fields after review returns the
   application to pending. The registration message-to-GetTreat action remains unmapped
   because no support ticket/clarification API contract exists.
@@ -627,6 +630,42 @@ existing `provider` role; do not introduce a separate doctor actor or role.
 - Validation is offline; local MongoDB is unavailable and Cloudinary writes were not
   attempted. Postman integration requires a dedicated non-production database and
   configured Cloudinary test credentials.
+
+### 4R — Admin and Super Admin foundation (2026-10-14)
+
+- Actor mapping confirmed by the user: Control Admin = `admin`; Medical Staff Admin / doctor
+  = `provider`; Super Admin = `super_admin`. Providers retain profession in `ProviderProfile`;
+  no separate Medical Staff Admin role is introduced.
+- Added `AdminProfile` linked to `User`, with `admin_type: control_admin` and explicit
+  boolean permission scopes. `manage_admins` is stored as a future scope; account-management
+  routes remain super-admin-only.
+- Added operator-controlled `npm run bootstrap:super-admin`. It requires explicit
+  environment authorization, refuses to elevate existing accounts, and does not alter
+  an existing super admin. Point `MONGO_URI` to a dedicated non-production database for
+  local testing.
+- Super-admin-only routes are mounted at `/api/super-admin`: create/list/update Control
+  Admin accounts. New admin accounts require email verification. Public signup still
+  cannot create `admin` or `super_admin` accounts.
+- Admin and super-admin password sign-in now requires a separate email OTP at
+  `POST /api/auth/admin/2fa/verify`; codes expire according to configured OTP lifetime,
+  attempts are capped, and resend is limited to once per minute. Tokens are issued only
+  after successful OTP verification.
+- Provider approval now requires an admin `manage_providers` permission; admin health
+  condition configuration requires `manage_assessments`. Super admins bypass these scopes.
+- Provider registration requires the three listed credentials, each JPG/PNG/PDF up to
+  8 MB: higher institution certificate, NYSC certificate/exemption, and medical license.
+- API guide: `docs/admin-management-api.md`; provider guide updated at
+  `docs/provider-instructions-api.md`; `getTreat-api.json` updated.
+- Tests: `tests/admin-management.policy.test.js`, `tests/admin-auth-2fa.test.js`, and
+  `tests/provider-registration.policy.test.js`.
+- Still outstanding in 4R: patient/provider moderation and detail domains, dashboard
+  aggregates, content, notifications, support tickets, community moderation, reports,
+  transactions, settings, admin audit log, and API-level integration against an isolated
+  MongoDB and Cloudinary test configuration. These should be mapped to the corresponding
+  design exports before their entities/routes are added.
+- Admin Figma also includes a Medical License document action, now reflected in the
+  provider registration contract. Other document requirements should remain limited to
+  the approved screen and later confirmed requirements.
 
 ---
 

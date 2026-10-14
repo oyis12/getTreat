@@ -23,6 +23,33 @@ export async function connectDB() {
     }
 
     await mongoose.connect(env.mongoUri, options);
+
+    // Replace the legacy sparse index, which also indexed explicit null values.
+    // This touches only the Google ID index; existing users and Google IDs remain intact.
+    if (!env.isProd) {
+      const users = mongoose.connection.collection('users');
+      const indexes = await users.indexes();
+      const googleIdIndex = indexes.find(
+        (index) => index.name === 'auth.providers.google.googleId_1'
+      );
+      const hasStringOnlyPartialIndex =
+        googleIdIndex?.partialFilterExpression?.['auth.providers.google.googleId']?.$type === 'string';
+
+      if (googleIdIndex && !hasStringOnlyPartialIndex) {
+        await users.dropIndex(googleIdIndex.name);
+      }
+
+      await users.createIndex(
+        { 'auth.providers.google.googleId': 1 },
+        {
+          name: 'auth.providers.google.googleId_1',
+          unique: true,
+          partialFilterExpression: {
+            'auth.providers.google.googleId': { $type: 'string' },
+          },
+        }
+      );
+    }
   } catch (err) {
     console.error('❌ Critical: Failed to connect to MongoDB:', err.message);
     process.exit(1);

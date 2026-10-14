@@ -16,8 +16,8 @@ bearer tokens for an active provider, admin, and patient. All JSON requests use
 After provider signup, email verification, and signin, submit provider registration as
 `multipart/form-data`. The server creates a linked `ProviderProfile` with
 `approval_status: "pending"`. The provider cannot approve themselves. All profile
-fields and three consent checks are required. Both credential files shown in the
-registration design are required; profile image is optional.
+fields and three consent checks are required. All three required credentials must be
+submitted on first registration; profile image is optional.
 
 ```http
 PUT {{base_url}}/api/provider/me/profile
@@ -25,9 +25,9 @@ Authorization: Bearer {{provider_access_token}}
 ```
 
 In Postman select Body → form-data. Postman generates the multipart `Content-Type`
-header and boundary; do not set that header manually. The two credential file fields
+header and boundary; do not set that header manually. The three credential file fields
 must be included in the first submission; subsequent updates may retain existing
-credentials and replace either one.
+credentials and replace any one.
 
 | Key | Type | Example |
 | --- | --- | --- |
@@ -44,6 +44,7 @@ credentials and replace either one.
 | `profile_image` | File | Optional JPG/PNG, max 8 MB |
 | `higher_institution_certificate` | File | Required JPG/PNG/PDF, max 8 MB |
 | `nysc_certificate` | File | Required certificate/exemption JPG/PNG/PDF, max 8 MB |
+| `medical_license` | File | Required JPG/PNG/PDF, max 8 MB |
 
 Allowed values are `gynecology`, `physiotherapist`, `food_nutrition`, and `others`.
 The provider profile route requires an authenticated, email-verified, active account
@@ -67,10 +68,11 @@ GET {{base_url}}/api/admin/providers?page=1&limit=20
 Authorization: Bearer {{admin_access_token}}
 ```
 
-Filter with `approval_status=pending|approved|rejected|all`. Admin and super admin
-roles can approve or reject. Each status change is recorded in the provider profile's
+Filter with `approval_status=pending|approved|rejected|all`. Admins with the
+`manage_providers` permission and super admins can approve or reject. Each status
+change is recorded in the provider profile's
 `approval_history` with the acting user and timestamp. Approval returns `409` until
-profile fields, all consents, and both credential files are present. Changing profile
+profile fields, all consents, and all three credential files are present. Changing profile
 details, profession, photo, or credentials after approval returns the application to
 `pending`.
 

@@ -5,6 +5,7 @@ import {
 } from "../controllers/admin-provider.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { adminOnly } from "../middlewares/role.middleware.js";
+import { requireAdminPermission } from "../middlewares/admin-permission.middleware.js";
 import {
   validateProviderApprovalPayload,
   validateProviderProfileListQuery,
@@ -12,7 +13,7 @@ import {
 
 const router = express.Router();
 
-router.use(protect, adminOnly);
+router.use(protect, adminOnly, requireAdminPermission("manage_providers"));
 router.get("/", validateProviderProfileListQuery, listProvidersForReview);
 router.patch(
   "/:providerProfileId/approval",

@@ -23,6 +23,7 @@ import providerRoutes from "./routes/provider.routes.js";
 import adminProviderRoutes from "./routes/admin-provider.routes.js";
 import patientProviderInstructionRoutes from "./routes/patient-provider-instruction.routes.js";
 import providerDiscoveryRoutes from "./routes/provider-discovery.routes.js";
+import superAdminRoutes from "./routes/super-admin.routes.js";
 
 
 
@@ -73,6 +74,7 @@ app.use("/api/user", patientProviderInstructionRoutes);
 app.use("/api/provider", providerRoutes);
 app.use("/api/providers", providerDiscoveryRoutes);
 app.use("/api/admin/providers", adminProviderRoutes);
+app.use("/api/super-admin", superAdminRoutes);
 app.use("/api/user/babies", babyProgressRoutes);
 app.use("/api/user/babies", babyRoutes);
 

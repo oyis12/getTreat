@@ -8,12 +8,12 @@ export const isProviderRegistrationComplete = (profile) => {
     profile.years_experience !== null && profile.years_experience !== undefined &&
     profile.bio?.trim() && profile.country?.trim() && profile.state?.trim() && profile.address?.trim() &&
     profile.consents?.credentials_valid && profile.consents?.regulations_agreed && profile.consents?.professional_data_consent &&
-    credentialKinds.has("higher_institution_certificate") && credentialKinds.has("nysc_certificate")
+    credentialKinds.has("higher_institution_certificate") && credentialKinds.has("nysc_certificate") && credentialKinds.has("medical_license")
   );
 };
 
 export const assertProviderRegistrationComplete = (profile) => {
   if (!isProviderRegistrationComplete(profile)) {
-    throw new AppError("Provider registration is incomplete; both required credentials and all consent/profile fields are required before approval", 409);
+    throw new AppError("Provider registration is incomplete; the higher institution certificate, NYSC certificate/exemption, medical license, and all consent/profile fields are required before approval", 409);
   }
 };

@@ -14,6 +14,7 @@ const completeProfile = () => ({
   credentials: [
     { kind: "higher_institution_certificate" },
     { kind: "nysc_certificate" },
+    { kind: "medical_license" },
   ],
 });
 
@@ -22,6 +23,10 @@ test("provider registration cannot be approved before consent, profile, and cred
   incomplete.credentials.pop();
   assert.equal(isProviderRegistrationComplete(incomplete), false);
   assert.throws(() => assertProviderRegistrationComplete(incomplete), { statusCode: 409 });
+
+  const noLicense = completeProfile();
+  noLicense.credentials = noLicense.credentials.filter((credential) => credential.kind !== "medical_license");
+  assert.equal(isProviderRegistrationComplete(noLicense), false);
 
   const noConsent = completeProfile();
   noConsent.consents.regulations_agreed = false;
@@ -49,8 +54,8 @@ test("provider profile schema stores registration and authenticated credential m
     state: "Lagos",
     address: "Address",
     consents: { credentials_valid: true, regulations_agreed: true, professional_data_consent: true, accepted_at: new Date() },
-    credentials: [{ kind: "higher_institution_certificate", public_id: "private/provider-certificate", resource_type: "raw", format: "pdf" }],
+    credentials: [{ kind: "medical_license", public_id: "private/provider-license", resource_type: "raw", format: "pdf" }],
   });
   await assert.doesNotReject(profile.validate());
-  assert.equal(profile.credentials[0].public_id, "private/provider-certificate");
+  assert.equal(profile.credentials[0].public_id, "private/provider-license");
 });

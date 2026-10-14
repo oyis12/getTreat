@@ -30,6 +30,7 @@ import { sanitizeUser } from "../utils/sanitize.js";
 
 import {
   sendVerificationEmail,
+  sendAdminLoginCode,
   sendPasswordResetEmail,
 } from "../utils/email.js";
 
@@ -129,7 +130,6 @@ export const signup = async (payload, req) => {
         },
         google: {
           enabled: false,
-          googleId: null,
         },
       },
     },
@@ -258,6 +258,26 @@ export const signin = async (email, password, req) => {
     );
   }
 
+  if (user.role === "admin" || user.role === "super_admin") {
+    const code = generateOtp();
+    await Verification.deleteMany({ user: user._id, type: "admin_login_2fa" });
+    await Verification.create({
+      user: user._id,
+      email: user.email,
+      codeHash: hashOtp(code),
+      type: "admin_login_2fa",
+      expiresAt: getOtpExpiration(env.verificationCodeExpiresMinutes),
+      attempts: 0,
+      maxAttempts: env.maxOtpAttempts,
+    });
+    await sendAdminLoginCode({ email: user.email, fullname: user.fullname, code });
+    return {
+      requires_2fa: true,
+      email: user.email,
+      expires_in_minutes: env.verificationCodeExpiresMinutes,
+    };
+  }
+
   user.lastLoginAt = new Date();
 
   if (user.accountStatus === "pending") {
@@ -303,6 +323,59 @@ export const signin = async (email, password, req) => {
     ...(profile ? { profile } : {}),
     ...tokens,
   };
+};
+
+export const verifyAdminLoginCode = async (email, code, req) => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user || !["admin", "super_admin"].includes(user.role) || !user.emailVerified || !["active", "pending"].includes(user.accountStatus)) {
+    throw new AppError("Invalid or expired admin sign-in code", 401);
+  }
+  const verification = await Verification.findOne({ user: user._id, type: "admin_login_2fa", verifiedAt: null })
+    .sort({ createdAt: -1 }).select("+codeHash");
+  if (!verification || verification.expiresAt < new Date() || verification.attempts >= verification.maxAttempts) {
+    if (verification) await verification.deleteOne();
+    throw new AppError("Invalid or expired admin sign-in code", 401);
+  }
+  verification.attempts += 1;
+  if (!compareOtp(code, verification.codeHash)) {
+    await verification.save();
+    throw new AppError("Invalid or expired admin sign-in code", 401);
+  }
+  verification.verifiedAt = new Date();
+  await verification.save();
+  await verification.deleteOne();
+  user.lastLoginAt = new Date();
+  if (user.accountStatus === "pending") user.accountStatus = "active";
+  if (!user.page) user.page = "dashboard";
+  await user.save();
+  const tokens = await issueTokens(user, req);
+  return { user: sanitizeUser(user), ...tokens };
+};
+
+export const resendAdminLoginCode = async (email) => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user || !["admin", "super_admin"].includes(user.role) || !user.emailVerified || !["active", "pending"].includes(user.accountStatus)) {
+    return { accepted: true };
+  }
+  const latest = await Verification.findOne({ user: user._id, type: "admin_login_2fa", verifiedAt: null }).sort({ createdAt: -1 });
+  if (latest && Date.now() - latest.createdAt.getTime() < 60_000) {
+    throw new AppError("Please wait before requesting another sign-in code", 429);
+  }
+  const code = generateOtp();
+  await Verification.deleteMany({ user: user._id, type: "admin_login_2fa" });
+  await Verification.create({
+    user: user._id,
+    email: user.email,
+    codeHash: hashOtp(code),
+    type: "admin_login_2fa",
+    expiresAt: getOtpExpiration(env.verificationCodeExpiresMinutes),
+    attempts: 0,
+    maxAttempts: env.maxOtpAttempts,
+  });
+  await sendAdminLoginCode({ email: user.email, fullname: user.fullname, code });
+  return { accepted: true };
 };
 
 export const verifyEmail = async (email, code) => {

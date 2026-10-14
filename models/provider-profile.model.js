@@ -34,7 +34,7 @@ const approvalHistorySchema = new Schema(
 );
 
 const credentialSchema = new Schema({
-  kind: { type: String, enum: ["higher_institution_certificate", "nysc_certificate"], required: true },
+  kind: { type: String, enum: ["higher_institution_certificate", "nysc_certificate", "medical_license"], required: true },
   public_id: { type: String, required: true },
   resource_type: { type: String, enum: ["image", "raw", "video"], required: true },
   format: { type: String, required: true },

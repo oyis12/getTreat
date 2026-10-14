@@ -11,10 +11,11 @@ const fileFilter = (_req, file, callback) => {
 
 export const uploadProviderRegistrationFiles = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 3, fieldSize: 10 * 1024 },
+  limits: { fileSize: 8 * 1024 * 1024, files: 4, fieldSize: 10 * 1024 },
   fileFilter,
 }).fields([
   { name: "profile_image", maxCount: 1 },
   { name: "higher_institution_certificate", maxCount: 1 },
   { name: "nysc_certificate", maxCount: 1 },
+  { name: "medical_license", maxCount: 1 },
 ]);

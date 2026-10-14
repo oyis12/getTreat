@@ -109,6 +109,7 @@ export const submitProviderProfile = async (userId, payload, files = {}) => {
   const documents = [
     ["higher_institution_certificate", "higher_institution_certificate"],
     ["nysc_certificate", "nysc_certificate"],
+    ["medical_license", "medical_license"],
   ];
   const justUploaded = [];
   const uploadedCredentials = [];
@@ -149,9 +150,9 @@ export const submitProviderProfile = async (userId, payload, files = {}) => {
 
   if (!profile) {
     const kinds = new Set(uploadedCredentials.map((item) => item.kind));
-    if (!kinds.has("higher_institution_certificate") || !kinds.has("nysc_certificate")) {
+    if (!kinds.has("higher_institution_certificate") || !kinds.has("nysc_certificate") || !kinds.has("medical_license")) {
       await Promise.allSettled(justUploaded.map((asset) => deleteUploadedAsset(asset, { privateCredential: asset.privateCredential })));
-      throw new AppError("Both the higher institution certificate and NYSC certificate/exemption are required", 400);
+      throw new AppError("The higher institution certificate, NYSC certificate/exemption, and medical license are required", 400);
     }
     try {
       profile = await ProviderProfile.create({ user: userId, ...profileFields, credentials: uploadedCredentials, approval_status: "pending", submitted_at: now, approval_history: [{ approval_status: "pending", action_by: userId, changed_at: now }] });
@@ -166,9 +167,9 @@ export const submitProviderProfile = async (userId, payload, files = {}) => {
   const previousPhotoPublicId = profile.profile_image_public_id;
   const credentialsByKind = new Map(previousCredentials.map((item) => [item.kind, item.toObject?.() ?? item]));
   for (const item of uploadedCredentials) credentialsByKind.set(item.kind, item);
-  if (!credentialsByKind.has("higher_institution_certificate") || !credentialsByKind.has("nysc_certificate")) {
+  if (!credentialsByKind.has("higher_institution_certificate") || !credentialsByKind.has("nysc_certificate") || !credentialsByKind.has("medical_license")) {
     await Promise.allSettled(justUploaded.map((asset) => deleteUploadedAsset(asset, { privateCredential: asset.privateCredential })));
-    throw new AppError("Both the higher institution certificate and NYSC certificate/exemption are required", 400);
+    throw new AppError("The higher institution certificate, NYSC certificate/exemption, and medical license are required", 400);
   }
   const changed = profile.professional_field !== profileFields.professional_field ||
     profile.professional_field_other !== profileFields.professional_field_other ||
