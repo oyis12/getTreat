@@ -3,7 +3,7 @@
     "name": "GetTreat Frontend API Reference",
     "version": "2026-10-14",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for the currently mounted GetTreat backend, including provider-service subscriptions and Paystack billing APIs.",
+    "purpose": "Frontend integration reference for mounted GetTreat APIs, including provider-service subscriptions, Paystack billing, and read-only transaction history.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -63,6 +63,9 @@
       "/api/provider": "provider.routes.js",
       "/api/providers": "provider-discovery.routes.js",
       "/api/admin/providers": "admin-provider.routes.js",
+      "/api/admin/transactions": "admin-transaction.routes.js",
+      "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
+      "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
       "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
       "/api/user (vitals)": "vitals.routes.js via user.routes.js",
@@ -89,6 +92,9 @@
       "/api/provider": "provider.routes.js",
       "/api/providers": "provider-discovery.routes.js",
       "/api/admin/providers": "admin-provider.routes.js",
+      "/api/admin/transactions": "admin-transaction.routes.js",
+      "/api/user/me/transactions": "patient-transaction.routes.js via user.routes.js",
+      "/api/provider/me/transactions": "provider-transaction.routes.js via provider.routes.js",
       "/api/user/me/provider-subscriptions": "provider-subscription.routes.js",
       "/api/payments": "provider-subscription.routes.js (Paystack webhook)",
       "/api/user (vitals)": "vitals.routes.js via user.routes.js",
@@ -96,7 +102,7 @@
       "/api/user/me/babies": "baby.routes.js via user.routes.js"
     },
     "source_of_truth_rule": "Endpoint availability is determined by the currently working backend route registration. Groups marked mounted are available.",
-    "important_latest_codebase_note": "This reference includes 4M provider-service subscriptions, hosted Paystack checkout and payment verification, signed webhook processing, opt-in encrypted reusable authorization, and worker code plus Render Cron configuration in render.yaml (commit 775d74a). Hosted worker deployment is intentionally paused; check Render for a possible Blueprint auto-sync before assuming it is absent. Provider subscription remains separate from platform subscription.",
+    "important_latest_codebase_note": "4N read-only transaction history/details are implemented for current provider-service subscription payment attempts only. Platform subscriptions (4O), appointments, ads, wallet, withdrawals, provider earnings/payouts, fees, refunds and receipts are not implemented. 4M worker code/config remains prepared but hosted deployment is intentionally paused; check Render for possible Blueprint auto-sync before assuming it is absent.",
     "frontend_integration": {
       "authorization_header": "Authorization: Bearer <access_token>",
       "json_header": "Content-Type: application/json",
@@ -2090,7 +2096,31 @@
           "notes": ["Reject invalid signatures.", "Deduplicate event/transaction processing.", "Verify reference, amount, currency and purchase metadata before granting or renewing access."]
         }
       ],
-      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "Broader patient/provider/admin transaction APIs are roadmap phase 4N; implement only types backed by approved entities and rules.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
+      "payment_gateway": {"provider": "Paystack", "checkout": "Backend initializes; patient pays on hosted checkout.", "verification": "Backend verifies directly and processes signed webhooks idempotently.", "renewal": "Explicit checkout opt-in; three attempts across a seven-day grace period; reusable authorization token encrypted at rest; no card details retained.", "currency": "NGN; convert naira to integer kobo for Paystack.", "worker_command": "npm run worker:provider-billing (configured for a 10-minute Render Cron schedule; hosted deployment paused/unconfirmed).", "worker_config": "render.yaml; see docs/render-provider-billing-cron.md", "transaction_history": "Read-only 4N patient/provider/admin endpoints list provider-service subscription payment attempts; platform subscriptions and other transaction types remain deferred.", "concurrency": "A unique database index prevents simultaneous pending checkouts or active subscriptions for the same patient and service. Ensure provider billing indexes are created before enabling checkout."}
+    },
+    {
+      "name": "4N Provider-Service Subscription Transaction History",
+      "base_path": "/api/user/me/transactions, /api/provider/me/transactions, /api/admin/transactions",
+      "description": "Read-only patient, provider and admin history/details backed by existing ProviderPaymentAttempt records. This is the supported transaction type in the current 4N slice.",
+      "availability": "mounted",
+      "design_mapping": {
+        "feature": "List and view provider-service subscription payment attempts",
+        "actors": ["patient", "provider", "admin", "super_admin"],
+        "design_references": ["designs/patients_dashboard/Transactions/Patients Transactions History.png", "designs/patients_dashboard/Transactions/Patients transactions details.png", "designs/providers ui/transactions/7.0 Provider's Transaction.png", "designs/providers ui/transactions/7.1 Provider's Transaction History.png", "designs/providers ui/transactions/7.2 Provider's Transaction details.png", "designs/admin/patients/Control Admin- Transactions.png", "designs/admin/patients/Control Admin- Transaction details.png", "designs/super admin/patients/Admin- patients(Transactions).png", "designs/super admin/patients/Admin- patients(Transaction details).png", "designs/super admin/providers/Admin- view provider (Transaction).png"],
+        "entity": "ProviderPaymentAttempt with ProviderSubscription, ProviderProfile, and PatientProfile references",
+        "authorization": "Patient reads attempts owned by their patient profile; provider reads attempts tied to their provider profile; admin requires manage_transactions; super_admin bypasses admin scopes.",
+        "rules": ["Payment-attempt status is distinct from subscription entitlement status.", "Only currently persisted payment fields are returned; billing email, idempotency keys, access codes, authorization data and internal failure messages remain private.", "No payment state is changed by a history/detail read.", "Platform fees, withdrawals, payouts, payment method, wallet activity and refunds are not derived or invented."]
+      },
+      "endpoints": [
+        {"method": "GET", "path": "/api/user/me/transactions", "summary": "List the authenticated patient's provider-service payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/user/me/transactions/:transactionId", "summary": "Get one provider-service payment attempt owned by the authenticated patient", "availability": "mounted", "auth": "bearer", "roles": ["patient"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PROVIDER"}},
+        {"method": "GET", "path": "/api/provider/me/transactions", "summary": "List provider-service payment attempts for the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/provider/me/transactions/:transactionId", "summary": "Get one payment attempt tied to the authenticated provider", "availability": "mounted", "auth": "bearer", "roles": ["provider"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT"}},
+        {"method": "GET", "path": "/api/admin/transactions", "summary": "List platform provider-service payment attempts", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"query_params": {"page": 1, "limit": 20, "status": "all|initializing|pending|success|failed|reversed|refunded", "purpose": "all|initial|renewal", "sort": "newest|oldest|highest|lowest", "search": "optional reference/Paystack transaction ID"}}, "response": {"status": 200, "data": "PAGINATED_TRANSACTION_ATTEMPTS"}},
+        {"method": "GET", "path": "/api/admin/transactions/:transactionId", "summary": "Get one platform provider-service payment attempt", "availability": "mounted", "auth": "bearer", "roles": ["admin", "super_admin"], "permissions": ["manage_transactions for admin; super_admin bypasses"], "request": {"path_params": {"transactionId": "PAYMENT_ATTEMPT_OBJECT_ID"}}, "response": {"status": 200, "data": "TRANSACTION_ATTEMPT_WITH_PATIENT_AND_PROVIDER"}}
+      ],
+      "documentation": "docs/transactions-4n-api.md",
+      "deferred_design_items": ["4O platform subscription transactions", "appointments", "ads", "wallet/deposits", "withdrawals and payouts", "platform fee/commission", "refund actions", "payment method and bank data", "receipt generation", "earnings summaries"]
     }
   ],
   "schemas": {

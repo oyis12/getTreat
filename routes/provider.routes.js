@@ -26,12 +26,14 @@ import {
   validateProviderServiceId,
   validateProviderServicePayload,
 } from "../validators/provider.validator.js";
+import providerTransactionRoutes from "./provider-transaction.routes.js";
 
 const router = express.Router();
 
 router.use(protect, providerOnly);
 
 router.get("/me/profile", getMyProviderProfile);
+router.use("/me/transactions", providerTransactionRoutes);
 router.put("/me/profile", uploadProviderRegistrationFiles, validateProviderProfilePayload, submitMyProviderProfile);
 router.get("/me/services", getMyProviderServices);
 router.post("/me/services", validateProviderServicePayload, createMyProviderService);

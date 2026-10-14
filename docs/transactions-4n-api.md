@@ -1,0 +1,151 @@
+# 4N Transactions API
+
+## Scope and design mapping
+
+This first 4N slice exposes read-only transaction history/details for provider-service
+subscription payment attempts that already exist in `ProviderPaymentAttempt`. It covers
+the transaction history/detail views for patients, providers, and admins using the
+screens in:
+
+- `designs/patients_dashboard/Transactions/Patients Transactions History.png`
+- `designs/patients_dashboard/Transactions/Patients transactions details.png`
+- `designs/patients_dashboard/Transactions/Transaction history.png`
+- `designs/patients_dashboard/Transactions/Transaction details.png`
+- `designs/providers ui/transactions/7.0 Provider's Transaction.png`
+- `designs/providers ui/transactions/7.1 Provider's Transaction History.png`
+- `designs/providers ui/transactions/7.2 Provider's Transaction details.png`
+- `designs/admin/patients/Control Admin- Transactions.png`
+- `designs/admin/patients/Control Admin- Transaction details.png`
+- `designs/super admin/patients/Admin- patients(Transactions).png`
+- `designs/super admin/patients/Admin- patients(Transaction details).png`
+- `designs/super admin/providers/Admin- view provider (Transaction).png`
+
+The business record remains `ProviderPaymentAttempt`; its `ProviderSubscription`,
+`ProviderProfile`, and `PatientProfile` relationships supply the service and actor
+context. No separate transaction collection is added. The authenticated patient sees
+their own attempts, a provider sees attempts tied to their own provider profile, and an
+admin with `manage_transactions` or a super admin sees platform-wide attempts.
+
+This slice does not create money movement or alter payment state. It returns only fields
+persisted in the current codebase. It omits the Figma's platform-subscription records
+(phase 4O), appointments, ads, wallet/deposits, withdrawals, provider earnings/payouts,
+platform fees/commissions, payment-method labels, bank-account details, refunds,
+receipts, and summary analytics because their entities or approved rules are not
+implemented here. The visible 15% fee is not calculated or reported by this API.
+
+## Routes
+
+All routes are read-only and require `Authorization: Bearer <access_token>`.
+
+| Method | Route | Actor and access |
+| --- | --- | --- |
+| `GET` | `/api/user/me/transactions` | Patient's own provider-service subscription payment attempts |
+| `GET` | `/api/user/me/transactions/:transactionId` | One attempt owned by the patient |
+| `GET` | `/api/provider/me/transactions` | Provider's own service subscription payment attempts |
+| `GET` | `/api/provider/me/transactions/:transactionId` | One attempt tied to the provider's profile |
+| `GET` | `/api/admin/transactions` | Admin with `manage_transactions`; super admin allowed |
+| `GET` | `/api/admin/transactions/:transactionId` | Same admin authorization |
+
+No request body or additional headers are required. The admin endpoints are protected
+by `requireAdminPermission("manage_transactions")`; super admins bypass admin scopes.
+
+## List query parameters
+
+```text
+?page=1&limit=20&status=all&purpose=all&sort=newest&search=
+```
+
+- `page`: positive integer, default `1`.
+- `limit`: integer `1..100`, default `20`.
+- `status`: `all`, `initializing`, `pending`, `success`, `failed`, `reversed`, or `refunded`; default `all`.
+- `purpose`: `all`, `initial`, or `renewal`; default `all`.
+- `sort`: `newest`, `oldest`, `highest`, or `lowest`; default `newest`.
+- `search`: optional text up to 100 characters; searches the provider transaction reference and Paystack transaction ID.
+
+Example:
+
+```http
+GET /api/user/me/transactions?page=1&limit=20&status=success&purpose=initial&sort=newest
+Authorization: Bearer <patient_access_token>
+```
+
+## Response
+
+The list uses the standard paginated response envelope. Fields are audience-scoped:
+patients receive the provider, providers receive the patient, and admins receive both.
+Email addresses, billing email, idempotency keys, Paystack access codes, authorization
+data, and internal failure messages are never returned.
+
+```json
+{
+  "success": true,
+  "msg": "Transactions retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": "<payment-attempt-id>",
+        "transaction_reference": "gt4m<reference>",
+        "status": "success",
+        "purpose": "initial",
+        "amount_minor": 135000,
+        "amount": 1350,
+        "currency": "NGN",
+        "created_at": "2026-10-14T06:03:16.839Z",
+        "verified_at": "2026-10-14T06:08:49.287Z",
+        "provider_service": {
+          "id": "<provider-service-id>",
+          "title": "Pregnancy care subscription",
+          "billing_cycle": "monthly"
+        },
+        "provider_subscription_id": "<provider-subscription-id>",
+        "provider": { "id": "<provider-profile-id>", "fullname": "Alex Henderson" }
+      }
+    ],
+    "pagination": { "page": 1, "limit": 20, "total": 1, "pages": 1 }
+  }
+}
+```
+
+The provider-scoped representation uses the same transaction fields and includes
+`patient: { id, fullname }` instead of `provider`. Admin results include both actor
+objects. `amount_minor` is the persisted integer amount in kobo; `amount` is its NGN
+display value. Transaction `status` is payment-attempt state, not provider-subscription
+entitlement state.
+
+Detail request:
+
+```http
+GET /api/user/me/transactions/<payment-attempt-id>
+Authorization: Bearer <patient_access_token>
+```
+
+The detail response is `{ "success": true, "msg": "Transaction retrieved successfully", "data": <same transaction object> }`.
+An unknown or out-of-scope transaction returns `404`. Invalid IDs, filters, or pagination
+return `400`; missing authentication returns `401`; forbidden roles or admin permission
+failures return `403`.
+
+Example not-found response:
+
+```json
+{
+  "success": false,
+  "msg": "Transaction not found",
+  "data": null
+}
+```
+
+## Validation and operational behavior
+
+- The list endpoint accepts only the documented query parameters and bounded pagination.
+- `transactionId` must be a valid MongoDB ObjectId.
+- Reads are scoped by the authenticated actor's resolved profile; client-supplied profile/user IDs are not accepted.
+- No notification, upload, payment gateway request, database write, or status side effect occurs.
+- Records are ordered by creation date or persisted amount; pagination is applied in MongoDB.
+- Payment-method display, fee breakdown, timeline events, receipt generation, and refund actions are unavailable until their underlying data and requirements are approved.
+
+## Current gaps for later 4N work
+
+Before claiming the full Figma transaction domain is complete, map and approve the
+separate platform subscription, appointment, ads, wallet/deposit, withdrawal, payout,
+fee/commission, refund, payment-method, receipt, and transaction-summary workflows.
+Do not treat these as provider-service subscription payment attempts.

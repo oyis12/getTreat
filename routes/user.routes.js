@@ -12,6 +12,7 @@ import vitalRoutes from "./vitals.routes.js"
 import { protect } from "../middlewares/auth.middleware.js";
 import uploadPatientProfileImageMiddleware from "../middlewares/upload.middleware.js";
 import {validatePatientProfileUpdate} from "../validators/patient-profile.validator.js";
+import patientTransactionRoutes from "./patient-transaction.routes.js";
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ router.post(
 
 // Baby routes
 router.use("/me/babies", babyRoutes);
+router.use("/me/transactions", patientTransactionRoutes);
 router.use(vitalRoutes)
 
 export default router;

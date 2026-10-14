@@ -7,7 +7,7 @@
 
 ## 1. Exact continuation point
 
-**Current next phase: 4N — Transactions. The 4M worker deployment is intentionally paused while the user continues development.**
+**Current phase: 4N — Transactions. The first read-only history/detail slice for provider-service subscription payment attempts is implemented and tested; the wider Figma transaction domain remains incomplete. The 4M worker deployment is intentionally paused while the user continues development.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
@@ -15,7 +15,8 @@
 - **4L — Provider registration/profile/approval:** implemented with provider-owned offerings and patient discovery routes; medical license was added as a required credential in this work.
 - **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
 - **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. The one-shot worker, minimal environment configuration, ten-minute Render Cron definition, one-item batch limit, tests, and deployment guide are implemented and pushed in commit `775d74a`. The user asked to pause worker hosting while development continues. No Cron service creation or successful hosted-worker run has been confirmed; because the repository push could sync an existing Render Blueprint, inspect the Render dashboard before assuming it is absent or inactive. Resume by checking/suspending any auto-synced service first, then add secrets directly in Render and verify the queued webhook. The user authorized up to $2/month, but Render does not hard-cap Cron runtime spending. Keep provider subscriptions distinct from platform subscription (4O).
-- **Next:** begin **4N — Transactions** by mapping the patient, provider, Control Admin, and Super Admin transaction exports against the existing `ProviderPaymentAttempt`, subscription, and webhook records. Start with transaction history/details supported by persisted payment attempts. Separate or defer platform-subscription records (4O), and do not assume appointments, wallets, withdrawals, provider payouts, platform fees/commissions, refund behavior, or other transaction types until their entities and business rules are confirmed. 4N implementation has not started.
+- **4N progress:** read-only patient, provider, and admin history/detail routes for the existing provider-service `ProviderPaymentAttempt` records are mounted and covered by tests. Patient/provider queries enforce profile ownership; admin requires `manage_transactions`; super admin bypasses admin scopes. Responses exclude billing email, idempotency keys, access codes, reusable authorization data, and internal failure messages. See `docs/transactions-4n-api.md` and the `4N Provider-Service Subscription Transaction History` group in `getTreat-api.json`.
+- **Next:** continue 4N only after confirming the remaining financial scope. The Ready for Dev exports show platform subscriptions (4O), appointments, ads, wallet/deposits, withdrawals, provider earnings/payouts, a 15% platform fee, payment method, and receipt/detail data; not all have backing records or approved computation/settlement rules. Keep 4N endpoints read-only for now; do not calculate fees/earnings or initiate refunds, payouts, wallet operations, or platform-subscription charges without the required product decisions and entities. Determine whether to extend transaction records to more transaction types or keep the phase restricted to currently supported payment attempts. The 4M worker remains paused.
 - Do not restart completed features or invent clinical logic.
 - Latest fix: the user encountered a startup error because `validators/patient-profile.validator.js` did not export `validateRecordVital`. The user restored `validateRecordVital` and `validateUpdateVital`; they confirmed: **“its working.”**
 - The complete API reference JSON was generated as `getTreat-frontend-api-reference-2026-10-03-complete.json` and provided in the previous conversation.
@@ -164,7 +165,7 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - **4R Admin/Super Admin foundation — initial super-admin bootstrap, Control Admin account management, explicit permission scopes, and admin OTP sign-in are implemented; remaining admin domains are outstanding.**
 - **4M Patient ↔ Provider Subscriptions/Services — implemented and mounted; checkout, verified payment, idempotent webhook fulfillment, opt-in renewal, retry/grace policy and service entitlement are covered by offline tests. Paystack/MongoDB live integration remains to be tested in an isolated environment.**
 - Render worker implementation/configuration is prepared and pushed (`775d74a`). Hosted worker deployment is intentionally paused at the user's request. Whether the push caused a Render Blueprint sync is unverified; check the Render dashboard before resuming. Deployment instructions and cost estimate are in `docs/render-provider-billing-cron.md`.
-- **4N Transactions — next; patient/provider/admin transaction history and details remain upcoming. Map approved transaction types and role access before implementation.**
+- **4N Transactions — partially implemented:** read-only history/details for current provider-service subscription payment attempts are available to patient, provider, and authorized admin/super admin. Broader Figma transaction types and financial features remain outstanding; confirm their product rules and backing entities before implementation.
 - 4O Platform Subscription — upcoming
 - 4P Community — upcoming
 - 4Q Support — upcoming
@@ -785,11 +786,12 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 5. Worker hosting is paused while the user continues development. When explicitly
    resumed, first inspect Render for an auto-synced Cron service before creating or
    activating anything; keep platform subscription access state (4O) separate.
-6. Continue with 4N Transactions: inspect all relevant patient/provider/admin designs,
-   map their supported transaction types to existing payment records, define actor
-   access and detail fields, and clarify fee/refund/payout rules before implementing.
+6. Continue 4N: review `docs/transactions-4n-api.md`, then confirm whether 4N should
+   remain limited to existing provider-service payment attempts or include additional
+   transaction domains. Before implementing provider earnings, clarify the displayed
+   15% fee and settlement/payout rules; keep platform subscriptions in 4O.
 7. Report **already implemented / missing / uncertain**, then give a bounded implementation/test plan.
 8. Ask for clarification when clinical/product requirements are ambiguous.
 9. After every completed feature, update this handoff and API JSON.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation. The next development phase is 4N Transactions, beginning with design/API/entity mapping and confirmation of unsupported transaction types and financial rules.**
+**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N currently exposes read-only history/details for provider-service payment attempts only. Confirm the remaining transaction types and 15% fee/payout/refund rules before adding financial behavior. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
