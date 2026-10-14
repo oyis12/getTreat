@@ -10,6 +10,9 @@ const required = (key, fallback = undefined) => {
   return value;
 };
 
+const isProviderBillingWorker = process.env.PROVIDER_BILLING_WORKER === "true";
+const requiredForApi = (key) => isProviderBillingWorker ? "" : required(key);
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || "development",
 
@@ -24,12 +27,14 @@ export const env = {
 
   corsOrigins: (process.env.CORS_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean),
 
-  jwtAccessSecret: required("JWT_ACCESS_SECRET"),
-  jwtRefreshSecret: required("JWT_REFRESH_SECRET"),
+  // The billing cron process does not handle user authentication or media uploads.
+  // Keep those credentials out of its Render environment.
+  jwtAccessSecret: requiredForApi("JWT_ACCESS_SECRET"),
+  jwtRefreshSecret: requiredForApi("JWT_REFRESH_SECRET"),
 
-  cloudinaryApiKey: required("CLOUD_API_KEY"),
-  cloudinaryApiSecret: required("CLOUD_API_SECRET"),
-  cloudinaryCloudName: required("CLOUD_NAME"),
+  cloudinaryApiKey: requiredForApi("CLOUD_API_KEY"),
+  cloudinaryApiSecret: requiredForApi("CLOUD_API_SECRET"),
+  cloudinaryCloudName: requiredForApi("CLOUD_NAME"),
 
   smtpUser: process.env.SMTP_USER || "resend",
   smtpPass: process.env.SMTP_PASS || "",
@@ -50,9 +55,9 @@ export const env = {
 
   emailMode: process.env.EMAIL_MODE || "console",
 
-  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY || "",
+  paystackSecretKey: isProviderBillingWorker ? required("PAYSTACK_SECRET_KEY") : process.env.PAYSTACK_SECRET_KEY || "",
   paystackCallbackUrl: process.env.PAYSTACK_CALLBACK_URL || "",
-  paymentTokenEncryptionKey: process.env.PAYMENT_TOKEN_ENCRYPTION_KEY || "",
+  paymentTokenEncryptionKey: isProviderBillingWorker ? required("PAYMENT_TOKEN_ENCRYPTION_KEY") : process.env.PAYMENT_TOKEN_ENCRYPTION_KEY || "",
   providerRenewalMaxAttempts: 3,
   providerRenewalGraceDays: 7,
   providerRenewalRetryIntervalDays: 3,

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import process from "node:process";
 import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import ProviderSubscription from "../models/provider-subscription.model.js";
@@ -11,6 +13,7 @@ import {
 } from "../services/provider-subscription.service.js";
 import { verifyPaystackWebhookSignature } from "../services/paystack.service.js";
 import { decryptPaymentToken, encryptPaymentToken } from "../utils/payment-token-crypto.js";
+import { PROVIDER_BILLING_BATCH_SIZE, runProviderBillingWorkerCycle } from "../services/provider-billing-worker.js";
 import {
   validateAutoRenew,
   validateStartProviderSubscription,
@@ -121,4 +124,36 @@ test("reusable Paystack authorization tokens are encrypted and authenticated at 
   } finally {
     env.paymentTokenEncryptionKey = oldKey;
   }
+});
+
+test("provider billing worker needs billing/database secrets but not API or Cloudinary secrets", () => {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    process.env.PROVIDER_BILLING_WORKER = "true";
+    const { env } = await import("./config/env.js");
+    if (env.jwtAccessSecret !== "" || env.cloudinaryApiSecret !== "") process.exit(2);
+    if (env.paystackSecretKey !== "sk_test_worker" || !env.paymentTokenEncryptionKey) process.exit(3);
+  `], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PROVIDER_BILLING_WORKER: "true",
+      MONGO_URI: "mongodb://127.0.0.1:27017/provider_billing_worker_test",
+      PAYSTACK_SECRET_KEY: "sk_test_worker",
+      PAYMENT_TOKEN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("provider billing worker limits each scheduled cycle to one webhook and one renewal", async () => {
+  const calls = [];
+  const result = await runProviderBillingWorkerCycle({
+    processPendingPaystackWebhooks: async (limit) => { calls.push(["webhooks", limit]); return 1; },
+    runDueProviderRenewals: async (limit) => { calls.push(["renewals", limit]); return 0; },
+  });
+
+  assert.equal(PROVIDER_BILLING_BATCH_SIZE, 1);
+  assert.deepEqual(calls, [["webhooks", 1], ["renewals", 1]]);
+  assert.deepEqual(result, { webhookEvents: 1, renewalAttempts: 0 });
 });

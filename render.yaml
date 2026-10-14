@@ -1,0 +1,18 @@
+services:
+  - type: cron
+    name: gettreat-provider-billing
+    runtime: node
+    plan: 0.5c-512mb
+    schedule: "*/10 * * * *"
+    buildCommand: npm ci
+    startCommand: npm run worker:provider-billing
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYMENT_TOKEN_ENCRYPTION_KEY
+        sync: false
