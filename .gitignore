@@ -18,9 +18,11 @@ doc.txt
 # agentic rules
 AGENTS.md
 GETTREAT_HANDOFF.md
+GETREAT_COMPLETE_HANDOFF_2026-10-13.md
 
 # product  illustrations
 designs/
+screen_shots/
 
 # Dependency directories
 node_modules/
