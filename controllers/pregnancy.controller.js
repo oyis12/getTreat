@@ -79,3 +79,17 @@ export const updateCurrentPregnancy = async (req, res, next) => {
     next(error);
   }
 };
+
+export const confirmPregnancyBirth = async (req, res, next) => {
+  try {
+    if (!req.user?.id) throw new AppError("Authentication required", 401);
+    const data = await pregnancyService.confirmPregnancyBirth(req.user.id, req.body);
+    return sendSuccess(res, {
+      statusCode: 200,
+      msg: data.delivered ? "Birth confirmed successfully" : "Birth not confirmed",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

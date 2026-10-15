@@ -35,12 +35,40 @@ export const validatePregnancyPayload = (req, _res, next) => {
       }
     }
 
-    if (req.body.status !== undefined && !["active", "completed", "ended"].includes(req.body.status)) {
-      throw new AppError("Invalid pregnancy status", 400);
+    if (req.body.status !== undefined && !["active", "ended"].includes(req.body.status)) {
+      throw new AppError("status must be active or ended; use birth confirmation to complete a delivered pregnancy", 400);
     }
 
     if (req.body.has_fibroid !== undefined && typeof req.body.has_fibroid !== "boolean") {
       throw new AppError("has_fibroid must be a boolean", 400);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const validateBirthConfirmation = (req, _res, next) => {
+  try {
+    const body = req.body ?? {};
+    const allowedFields = ["delivered", "delivery_mode", "pregnancy_id"];
+    const unknown = Object.keys(body).filter((field) => !allowedFields.includes(field));
+    if (unknown.length) throw new AppError(`Unknown birth-confirmation field(s): ${unknown.join(", ")}`, 400);
+    if (typeof body.delivered !== "boolean") {
+      throw new AppError("delivered must be a boolean", 400);
+    }
+    if (body.pregnancy_id !== undefined &&
+        (typeof body.pregnancy_id !== "string" || !/^[a-f\d]{24}$/i.test(body.pregnancy_id))) {
+      throw new AppError("pregnancy_id must be a valid pregnancy ID", 400);
+    }
+
+    if (body.delivered) {
+      if (!["vaginal_birth", "cesarean_section"].includes(body.delivery_mode)) {
+        throw new AppError("delivery_mode must be vaginal_birth or cesarean_section when delivered is true", 400);
+      }
+    } else if (body.delivery_mode !== undefined) {
+      throw new AppError("delivery_mode is only accepted when delivered is true", 400);
     }
 
     next();

@@ -85,6 +85,8 @@ const serializePregnancy = (pregnancy) => {
     weeks_gone: pregnancy.weeks_gone,
     weeks_left: pregnancy.weeks_left,
     has_fibroid: pregnancy.has_fibroid,
+    birth_confirmed_at: pregnancy.birth_confirmed_at ?? null,
+    delivery_mode: pregnancy.delivery_mode ?? null,
     health_conditions: (pregnancy.health_conditions ?? []).map(serializeHealthCondition),
     health_assessments: (pregnancy.health_assessments ?? []).map(serializeHealthAssessment),
     created_at: pregnancy.createdAt,
@@ -171,6 +173,9 @@ export const updateCurrentPregnancy = async (userId, payload) => {
     pregnancy.has_fibroid = payload.has_fibroid;
   }
   if (payload.status !== undefined) {
+    if (payload.status === "completed") {
+      throw new AppError("Use the birth-confirmation endpoint to complete a delivered pregnancy", 409);
+    }
     pregnancy.status = payload.status;
     if (payload.status !== "active") pregnancy.is_current = false;
   }
@@ -179,4 +184,48 @@ export const updateCurrentPregnancy = async (userId, payload) => {
   await profile.save();
 
   return serializePregnancy(pregnancy);
+};
+
+export const confirmPregnancyBirth = async (userId, payload) => {
+  const profile = await getProfile(userId);
+  const pregnancy = payload.pregnancy_id
+    ? profile.pregnancies.id(payload.pregnancy_id)
+    : getCurrentPregnancy(profile);
+  if (payload.pregnancy_id && !pregnancy) throw new AppError("Pregnancy not found", 404);
+  if (!pregnancy) throw new AppError("No active pregnancy found", 404);
+
+  if (!payload.delivered) {
+    if (!pregnancy.is_current) {
+      throw new AppError("A completed pregnancy cannot be marked as not delivered", 409);
+    }
+    return {
+      delivered: false,
+      pregnancy: serializePregnancy(pregnancy),
+    };
+  }
+
+  if (pregnancy.birth_confirmed_at) {
+    if (pregnancy.delivery_mode === payload.delivery_mode) {
+      return { delivered: true, pregnancy: serializePregnancy(pregnancy) };
+    }
+    throw new AppError("Birth has already been confirmed for this pregnancy", 409);
+  }
+  if (pregnancy.status !== "active") {
+    throw new AppError("Birth has already been confirmed for this pregnancy", 409);
+  }
+
+  pregnancy.status = "completed";
+  pregnancy.is_current = false;
+  pregnancy.delivery_mode = payload.delivery_mode;
+  pregnancy.birth_confirmed_at = new Date();
+  pregnancy.expected_delivery_date = null;
+  pregnancy.current_trimester = 0;
+  pregnancy.weeks_left = 0;
+
+  await profile.save();
+
+  return {
+    delivered: true,
+    pregnancy: serializePregnancy(pregnancy),
+  };
 };

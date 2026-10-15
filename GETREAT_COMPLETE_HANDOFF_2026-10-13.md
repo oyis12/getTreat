@@ -26,7 +26,7 @@ configured prices and fills only absent legacy plan data. Ads remain out of scop
 
 ## 1. Exact continuation point
 
-**Current phase: 4N — Transactions, commission ledger, provider payouts and paid appointments. Provider-service billing and paid appointment booking/payment/refund paths are implemented. Staff appointment oversight and appointment-type administration await confirmation of the explicit admin permission boundary. The 4M worker deployment remains intentionally paused while development continues.**
+**Current continuation: complete the patient-dashboard design/API audit and close its remaining approved gaps before starting the provider, admin, and super-admin UI audits. 4N appointment payments and 4O platform subscriptions are implemented. The 4M worker deployment remains intentionally paused while development continues.**
 
 - **4H — My Vitals:** complete and tested.
 - **4I — My Baby Progress:** complete and tested.
@@ -35,6 +35,7 @@ configured prices and fills only absent legacy plan data. Ads remain out of scop
 - **4R — Admin/Super Admin:** foundational account provisioning, permission records, and admin login OTP are implemented; remaining admin dashboard domains are not implemented.
 - **4M:** provider-specific service subscriptions and Paystack checkout, verification, webhook reconciliation, optional auto-renew, three renewal attempts over a seven-day grace period, and service access through grace are implemented and mounted. The one-shot worker, minimal environment configuration, ten-minute Render Cron definition, one-item batch limit, tests, and deployment guide are implemented and pushed in commit `775d74a`. The user asked to pause worker hosting while development continues. No Cron service creation or successful hosted-worker run has been confirmed; because the repository push could sync an existing Render Blueprint, inspect the Render dashboard before assuming it is absent or inactive. Resume by checking/suspending any auto-synced service first, then add secrets directly in Render and verify the queued webhook. The user authorized up to $2/month, but Render does not hard-cap Cron runtime spending. Keep provider subscriptions distinct from platform subscription (4O).
 - **4N progress:** Patient/provider/admin transaction history now combines provider-service `ProviderPaymentAttempt` and `AppointmentPaymentAttempt`. Provider appointments use provider-configured weekly availability, date exceptions, duration and consultation fee; patient booking requires an active subscription to that provider, initializes Paystack checkout with an idempotency key and commission snapshot, and becomes provider-pending only after Paystack verification. Providers can accept/decline; paid decline/cancellation/reschedule requests a full Paystack refund. Appointment net/commission shares are ledgered/reversed idempotently and audited. Provider balance tracks available/reserved funds; negative available earnings are recoverable from future earnings. Provider bank methods use Paystack resolution and recipient creation; only the private recipient code, verified account name, bank and last four digits are stored. Provider payout requests use `Idempotency-Key` and reserve earnings. Admins with `manage_transactions` can approve/reject, retry conclusive failures, submit Paystack OTP directly, and reconcile. Signed Paystack transfer events settle payout state idempotently. See `docs/appointments-4n-api.md`, `docs/transactions-4n-api.md`, `docs/financial-4n-api.md` and `getTreat-api.json`.
+- **Patient dashboard audit:** See `docs/patient-dashboard-completion-roadmap.md` for the design-by-design gap list, code/contract findings, evidence-based clinical/privacy limits and ordered completion checklist. The My Baby lifecycle now captures a versioned parent/legal-guardian attestation, confirms birth and delivery mode, preserves baby access through the authenticated patient's pregnancy history, and allows baby creation under an owned birth-confirmed pregnancy. Consent attestation is not independent guardian verification or a claim of jurisdiction-wide compliance. Platform-subscription expiry still gates these patient routes; post-expiry access to historical health records remains a product-policy decision.
 - **4N decisions confirmed (2026-10-14/15):** no ads are in scope. Provider-service subscriptions and appointments incur the configurable platform commission (currently 15%) deducted from provider proceeds after successful payment; it is not added to the patient's amount. The setting belongs in `System`; each payment snapshots the rate at checkout. Providers request withdrawals and admins process them to provider banks using Paystack. Payment/transaction lifecycle changes and sensitive actor actions need audit trails. Appointment checkout is paid first; it stays pending until provider acceptance. Provider decline, cancellation and reschedule receive full refunds; rescheduling means refund old booking and make a separately paid booking. Appointment types are a separate admin-managed catalogue. Platform subscription remains separate in 4O.
 - **4N financial operations and database setup:** indexes are added by `CREATE_PROVIDER_PAYOUT_INDEXES=true npm run migrate:provider-payout-indexes`. Historical paid earnings are not automatically changed; `APPLY_PROVIDER_EARNINGS_BACKFILL=true npm run backfill:provider-earnings` snapshots the current fee for legacy successful payments and creates ledger/balance/audit records. Review the target MongoDB database and intended historical commission rate before running that backfill. Neither migration/backfill nor live Paystack transfer was run during implementation. Local tests and mocked Paystack calls pass; no live MongoDB transaction or Paystack payout has been verified. Ensure Paystack balance is funded for transfers. The 4M worker remains paused.
 - Do not restart completed features or invent clinical logic.
@@ -185,8 +186,8 @@ This is a conceptual boundary, not proof every future domain exists. Keep pregna
 - **4R Admin/Super Admin foundation — initial super-admin bootstrap, Control Admin account management, explicit permission scopes, and admin OTP sign-in are implemented; remaining admin domains are outstanding.**
 - **4M Patient ↔ Provider Subscriptions/Services — implemented and mounted; checkout, verified payment, idempotent webhook fulfillment, opt-in renewal, retry/grace policy and service entitlement are covered by offline tests. Paystack/MongoDB live integration remains to be tested in an isolated environment.**
 - Render worker implementation/configuration is prepared and pushed (`775d74a`). Hosted worker deployment is intentionally paused at the user's request. Whether the push caused a Render Blueprint sync is unverified; check the Render dashboard before resuming. Deployment instructions and cost estimate are in `docs/render-provider-billing-cron.md`.
-- **4N Transactions — provider-service payments and payouts implemented:** see `docs/financial-4n-api.md`, `docs/transactions-4n-api.md`, and `getTreat-api.json`. Appointment charging and 4O platform subscriptions remain outstanding.
-- 4O Platform Subscription — upcoming
+- **4N Transactions — provider-service payments, payouts and paid appointments implemented:** see `docs/appointments-4n-api.md`, `docs/financial-4n-api.md`, `docs/transactions-4n-api.md`, and `getTreat-api.json`.
+- **4O Platform Subscription — implemented:** see `docs/platform-subscriptions-4o-api.md`; auto-renew worker hosting remains paused by the user.
 - 4P Community — upcoming
 - 4Q Support — upcoming
 - 4R Admin — foundation implemented; broader admin and super-admin workflows upcoming
@@ -529,7 +530,7 @@ A Baby Zara test case used baseline weight 5.6 kg, length 60 cm, head circumfere
 
 ---
 
-## 10. 4J — Health Management: next task
+## 10. 4J — Health Management: completed reference
 
 Figma file:
 `https://www.figma.com/design/ANUmIFPqBQvwHpiurrtpt1/Getreat-Project?node-id=7361-39414&t=PBYe11Sipu4LMEd2-1`
@@ -552,7 +553,7 @@ Mobile:
 - `1128:3578` — Health Check 9
 - `1128:5380` — Health management selection
 
-**Design review update (2026-10-13):** Individual exports under `designs/patients_dashboard/Health management/` were inspected. They show the four assessment forms and their question inputs, condition summary states, and the Health Management selection screen. The original Figma MCP call limit still prevented inspection of every listed remote frame, so use the repository exports as the visual reference for this work.
+**Design review update (2026-10-15):** The patient dashboard exports under `designs/patients_dashboard/Health management/` are the visual reference. They show the four assessment forms and their question inputs, condition summary states, and the Health Management selection screen. The patient-design audit roadmap records current coverage and the remaining postpartum/clinical gaps.
 
 ### Existing implementation verified
 
@@ -569,9 +570,9 @@ Mobile:
 - No new assessment model or duplicate endpoint was added.
 - **Deferred TODO:** Health Check/condition-summary percentages and labels such as `Stable` or `At Risk` require an approved clinical scoring rule. Until then, return/use `result_status: "pending"` and `score: null`; do not calculate or infer a status.
 - **Open design discrepancy:** The Gestational Diabetes export includes “How do you see things?” but the seeded assessment does not. This question was not added because its relevance and intended answer values need confirmation. Keep this discrepancy visible for later review.
-- Provider instructions and provider matching are separate upcoming provider-domain work; do not create fake instructions in the patient assessment API.
+- Provider instructions are implemented in the separate 4K domain; do not create duplicate/fake instructions in the patient assessment API.
 
-### Required 4J workflow
+### Historical 4J implementation notes
 1. Treat the current code and individual exports as the implementation baseline.
 2. Keep existing condition and assessment APIs; do not duplicate the domain.
 3. Keep clinical summary calculation deferred until a scoring rule is approved.
@@ -797,27 +798,20 @@ Do not claim tests passed unless actually run or the user confirms. Distinguish 
 
 ---
 
-## 16. How the next AI should start
+## 16. Current continuation instructions
 
-1. Read this handoff completely.
-2. Have the user open the **current GetTreat project folder** in the new Codex account, or provide the latest ZIP if direct code inspection is needed.
-3. Inspect actual files before asserting route mounts/contracts.
-4. Confirm **4J/4K/4L/4M implementation status** from current code and tests.
+1. Read this handoff and `docs/patient-dashboard-completion-roadmap.md` completely before changing patient code.
+2. Treat the current repository as the source of truth; inspect routes, tests and API reference before changing contracts.
+3. 4N appointment payments and 4O platform subscriptions are implemented. Do not describe 4O as upcoming. 4J–4N are implemented; 4M worker hosting is intentionally paused.
+4. Continue the remaining patient dashboard checklist in order, resolving clinical/legal ambiguity instead of inventing workflows. Complete and test each patient phase, then audit provider, admin and super-admin screens.
 5. Worker hosting is paused while the user continues development. When explicitly
    resumed, first inspect Render for an auto-synced Cron service before creating or
    activating anything; keep platform subscription access state (4O) separate.
-6. Verify the 4N financial implementation and database setup. Apply payout indexes to
-   the intended MongoDB database. Review current platform commission and legacy payment
-   records before deciding whether to run the explicit historical earnings backfill.
-   Paid appointments now have a mapped and implemented patient/provider payment slice;
-   see `docs/appointments-4n-api.md`. Admin appointment access and appointment-type
-   management are mounted behind `manage_appointments`; super admins bypass that
-   permission and new admin profiles default it to false. Platform subscriptions remain
-   4O and ads are out of scope.
-7. Ask for clarification when clinical/product requirements are ambiguous.
-8. After every completed feature, update this handoff and API JSON.
+6. 4N financial/API references are in `docs/appointments-4n-api.md`, `docs/transactions-4n-api.md`, `docs/financial-4n-api.md`; 4O is documented in `docs/platform-subscriptions-4o-api.md`.
+7. Ask for clarification when a clinical/product requirement is ambiguous and keep ads out of scope.
+8. After each completed feature, update this handoff, the patient roadmap and `getTreat-api.json` as applicable.
 
-**Do not rebuild authentication, pregnancy, health assessments, My Baby, Vitals, Baby Progress, Health Management, provider instructions, provider registration/offering work, or 4M. 4N includes provider-service and appointment payments, commission ledger, Paystack refunds/payouts, transaction history, and admin appointment oversight/type management behind `manage_appointments`; 4O platform subscription remains future work. Ads are out of scope. Worker hosting is paused at the user's request; check Render for possible auto-sync before any future activation.**
+**Do not rebuild already working foundations or completed 4J–4O domains. The patient lifecycle slice added in this audit includes guardian attestation, birth confirmation and historical baby access; the remaining patient UI gaps and open decisions are tracked in `docs/patient-dashboard-completion-roadmap.md`. Ads are out of scope. Worker hosting remains paused at the user's request; check Render for possible auto-sync before any future activation.**
 
 ---
 

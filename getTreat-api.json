@@ -1,9 +1,9 @@
 {
   "document": {
     "name": "GetTreat Frontend API Reference",
-  "version": "2026-10-15-4O-platform-subscriptions",
+  "version": "2026-10-15-patient-lifecycle",
     "base_url": "{{API_BASE_URL}}",
-    "purpose": "Frontend integration reference for mounted GetTreat APIs, including platform and provider subscriptions, paid appointments, commission ledger, provider payouts, Paystack transfers, and transaction history.",
+    "purpose": "Frontend integration reference for mounted GetTreat APIs, including patient lifecycle, subscriptions, paid appointments, financial workflows and transaction history.",
     "snapshot_note": "getTreat api integration",
     "response_contract": {
       "success": {
@@ -606,7 +606,7 @@
     {
       "name": "Pregnancy",
       "base_path": "/api/user",
-      "description": "Current pregnancy and pregnancy history.",
+      "description": "Current pregnancy, pregnancy history and patient-reported birth confirmation.",
       "endpoints": [
         {
           "method": "GET",
@@ -646,6 +646,33 @@
         },
         {
           "method": "POST",
+          "path": "/api/user/me/pregnancy/birth-confirmation",
+          "summary": "Confirm whether birth has occurred and record delivery mode",
+          "auth": "bearer",
+          "content_type": "application/json",
+          "request": {
+            "body": {
+              "pregnancy_id": "owned pregnancy ID, optional for current pregnancy and recommended for idempotent retry",
+              "delivered": "boolean, required",
+              "delivery_mode": "vaginal_birth|cesarean_section, required only when delivered=true"
+            }
+          },
+          "response": {
+            "status": 200,
+            "msg": "Birth confirmed successfully|Birth not confirmed",
+            "data": {
+              "delivered": "boolean",
+              "pregnancy": "PREGNANCY_OBJECT"
+            }
+          },
+          "common_errors": [400, 401, 403, 404, 409],
+          "notes": [
+            "A confirmed birth marks the owned current pregnancy completed and preserves it in history.",
+            "birth_confirmed_at records when the patient confirmed; it is not represented as an independently verified clinical delivery date."
+          ]
+        },
+        {
+          "method": "POST",
           "path": "/api/user/me/pregnancy",
           "summary": "Create current pregnancy",
           "auth": "bearer",
@@ -678,7 +705,7 @@
             "body": {
               "conception_method": "natural_conception|assisted_reproduction|null",
               "last_menstral_date": "ISO date|null",
-              "status": "active|completed|ended",
+              "status": "active|ended; use birth-confirmation for completed",
               "has_fibroid": "boolean"
             }
           },
@@ -909,7 +936,7 @@
     {
       "name": "My Baby",
       "base_path": "/api/user/me/babies",
-      "description": "Baby CRUD and photo management under the patient's current pregnancy.",
+      "description": "Baby records, consent attestation, growth and photo management across the authenticated patient's pregnancy history.",
       "endpoints": [
         {
           "method": "POST",
@@ -922,6 +949,8 @@
               "full_name": "string, required",
               "date_of_birth": "ISO date, required, not future",
               "gender": "male|female, required",
+              "guardian_consent": "true, required; explicit parent/legal-guardian attestation",
+              "pregnancy_id": "owned current or birth-confirmed pregnancy ID, optional for current pregnancy",
               "weight": {
                 "value": "number >= 0",
                 "unit": "kg|lbs"
@@ -944,7 +973,12 @@
           "common_errors": [
             400,
             403,
-            404
+            404,
+            409
+          ],
+          "notes": [
+            "The server records consent version, acceptance timestamp, authenticated user and child_health_data scope. It does not independently verify guardian identity.",
+            "Legacy records are not backfilled with consent."
           ]
         },
         {
@@ -2252,6 +2286,8 @@
       "weeks_gone": "number",
       "weeks_left": "number",
       "has_fibroid": false,
+      "birth_confirmed_at": "ISO_DATETIME|null",
+      "delivery_mode": "vaginal_birth|cesarean_section|null",
       "health_conditions": [],
       "health_assessments": [],
       "created_at": "ISO_DATETIME",
@@ -2379,6 +2415,8 @@
     },
     "BABY_OBJECT": {
       "id": "BABY_ID",
+      "pregnancy_id": "PREGNANCY_ID|null",
+      "pregnancy_status": "active|completed|ended|null",
       "full_name": "Baby Zara",
       "date_of_birth": "ISO_DATETIME",
       "gender": "female",
@@ -2404,6 +2442,11 @@
           "public_id": "CLOUDINARY_PUBLIC_ID"
         }
       ],
+      "data_consent": {
+        "version": "CONSENT_VERSION|null",
+        "accepted_at": "ISO_DATETIME|null",
+        "scope": "child_health_data|null"
+      },
       "created_at": "ISO_DATETIME",
       "modified_at": "ISO_DATETIME"
     },

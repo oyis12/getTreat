@@ -200,8 +200,20 @@ const babyGrowthRecordSchema = new Schema(
   }
 );
 
+const infantDataConsentSchema = new Schema(
+  {
+    version: { type: String, required: true, trim: true },
+    accepted_at: { type: Date, required: true },
+    accepted_by: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    scope: { type: String, enum: ["child_health_data"], required: true },
+  },
+  { _id: false }
+);
+
 const babySchema = new Schema(
   {
+    data_consent: { type: infantDataConsentSchema, default: null },
+
     full_name: {
       type: String,
       required: true,
@@ -341,6 +353,17 @@ const pregnancySchema = new Schema(
       default: false,
     },
 
+    birth_confirmed_at: {
+      type: Date,
+      default: null,
+    },
+
+    delivery_mode: {
+      type: String,
+      enum: ["vaginal_birth", "cesarean_section", null],
+      default: null,
+    },
+
     health_conditions: {
       type: [pregnancyHealthConditionSchema],
       default: [],
@@ -369,6 +392,7 @@ export {
   babyPhotoSchema,
   babyMeasurementSchema,
   babyGrowthRecordSchema,
+  infantDataConsentSchema,
   pregnancyHealthConditionSchema,
   healthAssessmentAnswerSchema,
   healthAssessmentSchema,

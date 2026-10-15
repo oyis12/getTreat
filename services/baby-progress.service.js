@@ -1,6 +1,7 @@
 import User from "../models/user.model.js";
 import PatientProfile from "../models/patient-profile.model.js";
 import AppError from "../utils/AppError.js";
+import { findBabyInPregnancyHistory } from "./baby.service.js";
 
 const ensurePatientProfile = async (userId) => {
   const user = await User.findById(userId).select("role accountStatus");
@@ -18,16 +19,10 @@ const ensurePatientProfile = async (userId) => {
   return profile;
 };
 
-const getCurrentPregnancy = (profile) => {
-  const pregnancy = profile.pregnancies.find((item) => item.is_current === true);
-  if (!pregnancy) throw new AppError("No active pregnancy found", 404);
-  return pregnancy;
-};
-
-const findBaby = (pregnancy, babyId) => {
-  const baby = pregnancy.babies.id(babyId);
-  if (!baby) throw new AppError("Baby not found", 404);
-  return baby;
+const findBaby = (profile, babyId) => {
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  return result.baby;
 };
 
 const serializeMeasurement = (measurement) =>
@@ -241,8 +236,7 @@ const buildProgress = (baby, history) => {
 
 export const addGrowthRecord = async (userId, babyId, payload) => {
   const profile = await ensurePatientProfile(userId);
-  const pregnancy = getCurrentPregnancy(profile);
-  const baby = findBaby(pregnancy, babyId);
+  const baby = findBaby(profile, babyId);
 
   if (!payload.weight && !payload.length && !payload.head_circumference) {
     throw new AppError("At least one growth measurement is required", 400);
@@ -279,8 +273,7 @@ export const addGrowthRecord = async (userId, babyId, payload) => {
 
 export const getGrowthHistory = async (userId, babyId, query) => {
   const profile = await ensurePatientProfile(userId);
-  const pregnancy = getCurrentPregnancy(profile);
-  const baby = findBaby(pregnancy, babyId);
+  const baby = findBaby(profile, babyId);
   const filters = parseFilters(query);
   const history = filterGrowth(ensureLegacyBaseline(baby), filters);
   const sorted = history.slice().sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
@@ -297,8 +290,7 @@ export const getGrowthHistory = async (userId, babyId, query) => {
 
 export const getBabyProgress = async (userId, babyId, query = {}) => {
   const profile = await ensurePatientProfile(userId);
-  const pregnancy = getCurrentPregnancy(profile);
-  const baby = findBaby(pregnancy, babyId);
+  const baby = findBaby(profile, babyId);
   const filters = parseFilters(query);
   const allHistory = ensureLegacyBaseline(baby);
   const history = filterGrowth(allHistory, filters)
@@ -328,8 +320,7 @@ export const getBabyProgress = async (userId, babyId, query = {}) => {
 
 export const getBabyProgressReport = async (userId, babyId, query) => {
   const profile = await ensurePatientProfile(userId);
-  const pregnancy = getCurrentPregnancy(profile);
-  const baby = findBaby(pregnancy, babyId);
+  const baby = findBaby(profile, babyId);
   const filters = parseFilters(query);
   const allHistory = ensureLegacyBaseline(baby);
   const history = filterGrowth(allHistory, filters).slice().sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
@@ -367,6 +358,5 @@ export const getBabyProgressReport = async (userId, babyId, query) => {
 
 export const findBabyForProgress = async (userId, babyId) => {
   const profile = await ensurePatientProfile(userId);
-  const pregnancy = getCurrentPregnancy(profile);
-  return findBaby(pregnancy, babyId);
+  return findBaby(profile, babyId);
 };

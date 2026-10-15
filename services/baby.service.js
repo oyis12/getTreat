@@ -3,6 +3,8 @@ import PatientProfile from "../models/patient-profile.model.js";
 import AppError from "../utils/AppError.js";
 import cloudinary from "../config/cloudinary.js";
 
+const INFANT_DATA_CONSENT_VERSION = "infant-health-data-v1";
+
 const ensurePatientProfile = async (userId) => {
   const user = await User.findById(userId).select(
     "role accountStatus"
@@ -55,17 +57,24 @@ const getCurrentPregnancy = (profile) => {
   return pregnancy;
 };
 
-const findBaby = (pregnancy, babyId) => {
-  const baby = pregnancy.babies.id(babyId);
-
-  if (!baby) {
-    throw new AppError(
-      "Baby not found",
-      404
-    );
+export const findBabyInPregnancyHistory = (profile, babyId) => {
+  for (const pregnancy of profile.pregnancies ?? []) {
+    const baby = pregnancy.babies?.id(babyId);
+    if (baby) return { pregnancy, baby };
   }
+  return null;
+};
 
-  return baby;
+const resolveBabyPregnancyForCreate = (profile, pregnancyId) => {
+  if (!pregnancyId) return getCurrentPregnancy(profile);
+
+  const pregnancy = profile.pregnancies.id(pregnancyId);
+  if (!pregnancy) throw new AppError("Pregnancy not found", 404);
+
+  if (pregnancy.is_current) return pregnancy;
+  if (pregnancy.status === "completed" && pregnancy.birth_confirmed_at) return pregnancy;
+
+  throw new AppError("Baby records can only be added to the current pregnancy or a birth-confirmed pregnancy", 409);
 };
 
 const serializeMeasurement = (measurement) => {
@@ -79,8 +88,10 @@ const serializeMeasurement = (measurement) => {
   };
 };
 
-const serializeBaby = (baby) => ({
+const serializeBaby = (baby, pregnancy = null) => ({
   id: baby._id.toString(),
+  pregnancy_id: pregnancy?._id?.toString?.() ?? null,
+  pregnancy_status: pregnancy?.status ?? null,
 
   full_name: baby.full_name,
 
@@ -113,6 +124,14 @@ const serializeBaby = (baby) => ({
     url: photo.url,
     public_id: photo.public_id,
   })),
+
+  data_consent: baby.data_consent
+    ? {
+        version: baby.data_consent.version,
+        accepted_at: baby.data_consent.accepted_at,
+        scope: baby.data_consent.scope,
+      }
+    : null,
 
   created_at: baby.createdAt,
 
@@ -214,9 +233,15 @@ const buildBabyPayload = (payload) => {
 export const createBaby = async (userId, payload) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
+  const pregnancy = resolveBabyPregnancyForCreate(profile, payload.pregnancy_id);
 
   const babyPayload = buildBabyPayload(payload);
+  babyPayload.data_consent = {
+    version: INFANT_DATA_CONSENT_VERSION,
+    accepted_at: new Date(),
+    accepted_by: userId,
+    scope: "child_health_data",
+  };
 
   pregnancy.babies.push(babyPayload);
 
@@ -235,16 +260,18 @@ export const createBaby = async (userId, payload) => {
 
   await profile.save();
 
-  return serializeBaby(baby);
+  return serializeBaby(baby, pregnancy);
 };
 
 
 export const getBabies = async (userId) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  return pregnancy.babies.map(serializeBaby);
+  return profile.pregnancies
+    .flatMap((pregnancy) => (pregnancy.babies ?? []).map((baby) => ({ pregnancy, baby })))
+    .map(({ pregnancy, baby }) => ({
+      ...serializeBaby(baby, pregnancy),
+    }));
 };
 
 
@@ -254,14 +281,11 @@ export const getBaby = async (
 ) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { pregnancy, baby } = result;
 
-  const baby = findBaby(
-    pregnancy,
-    babyId
-  );
-
-  return serializeBaby(baby);
+  return serializeBaby(baby, pregnancy);
 };
 
 
@@ -272,12 +296,9 @@ export const updateBaby = async (
 ) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  const baby = findBaby(
-    pregnancy,
-    babyId
-  );
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { pregnancy, baby } = result;
 
   if (payload.full_name !== undefined) {
     baby.full_name = payload.full_name.trim();
@@ -338,7 +359,7 @@ export const updateBaby = async (
 
   await profile.save();
 
-  return serializeBaby(baby);
+  return serializeBaby(baby, pregnancy);
 };
 
 
@@ -348,12 +369,9 @@ export const deleteBaby = async (
 ) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  const baby = findBaby(
-    pregnancy,
-    babyId
-  );
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { pregnancy, baby } = result;
 
   pregnancy.babies.pull(baby._id);
 
@@ -371,9 +389,9 @@ export const addBabyPhoto = async (userId, babyId, file) => {
 
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  const baby = findBaby(pregnancy, babyId);
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { baby } = result;
 
   if ((baby.photos ?? []).length >= 5) {
     throw new AppError(
@@ -410,9 +428,9 @@ export const updateBabyPhoto = async (
 
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  const baby = findBaby(pregnancy, babyId);
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { baby } = result;
 
   const photo = baby.photos.id(photoId);
 
@@ -458,9 +476,9 @@ export const updateBabyPhoto = async (
 export const deleteBabyPhoto = async (userId, babyId, photoId) => {
   const profile = await ensurePatientProfile(userId);
 
-  const pregnancy = getCurrentPregnancy(profile);
-
-  const baby = findBaby(pregnancy, babyId);
+  const result = findBabyInPregnancyHistory(profile, babyId);
+  if (!result) throw new AppError("Baby not found", 404);
+  const { baby } = result;
 
   const photo = baby.photos?.id(photoId);
 

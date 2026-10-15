@@ -4,6 +4,8 @@ const ALLOWED_CREATE_FIELDS = [
   "full_name",
   "date_of_birth",
   "gender",
+  "pregnancy_id",
+  "guardian_consent",
   "weight",
   "length",
   "head_circumference",
@@ -148,6 +150,20 @@ export const validateCreateBaby = (
       body,
       ALLOWED_CREATE_FIELDS
     );
+
+    if (body.guardian_consent !== true) {
+      throw new AppError(
+        "Confirm that you are the parent or legal guardian and consent to processing the child's health data",
+        400
+      );
+    }
+
+    if (
+      body.pregnancy_id !== undefined &&
+      (typeof body.pregnancy_id !== "string" || !/^[a-f\d]{24}$/i.test(body.pregnancy_id))
+    ) {
+      throw new AppError("pregnancy_id must be a valid pregnancy ID", 400);
+    }
 
     if (
       typeof body.full_name !== "string" ||

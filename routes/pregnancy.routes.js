@@ -5,16 +5,25 @@ import {
   getPregnancyHistory,
   createPregnancy,
   updateCurrentPregnancy,
+  confirmPregnancyBirth,
 } from "../controllers/pregnancy.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
-import validatePregnancyPayload from "../validators/pregnancy.validator.js";
+import validatePregnancyPayload, { validateBirthConfirmation } from "../validators/pregnancy.validator.js";
 import { requireActivePlatformSubscription } from "../middlewares/platform-subscription.middleware.js";
 
 const router = express.Router();
 
 router.get("/me/pregnancy", protect, requireActivePlatformSubscription, getCurrentPregnancy);
 router.get("/me/pregnancies", protect, requireActivePlatformSubscription, getPregnancyHistory);
+
+router.post(
+  "/me/pregnancy/birth-confirmation",
+  protect,
+  requireActivePlatformSubscription,
+  validateBirthConfirmation,
+  confirmPregnancyBirth
+);
 
 router.post(
   "/me/pregnancy",
