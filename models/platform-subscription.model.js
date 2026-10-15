@@ -8,7 +8,7 @@ const planSnapshot = new Schema({
 }, { _id: false });
 
 const platformSubscriptionSchema = new Schema({
-  patient_profile: { type: Schema.Types.ObjectId, ref: "PatientProfile", required: true, index: true },
+  patient_profile: { type: Schema.Types.ObjectId, ref: "PatientProfile", required: true },
   plan_snapshot: { type: planSnapshot, required: true },
   status: { type: String, enum: ["pending_payment", "active", "expired", "revoked", "payment_failed"], required: true, index: true },
   starts_at: { type: Date, default: null },
@@ -24,6 +24,13 @@ const platformSubscriptionSchema = new Schema({
 }, { timestamps: { createdAt: "createdAt", updatedAt: "modifiedAt" }, versionKey: false });
 
 platformSubscriptionSchema.index({ patient_profile: 1, status: 1, ends_at: -1 });
-platformSubscriptionSchema.index({ patient_profile: 1 }, { unique: true, partialFilterExpression: { status: { $in: ["pending_payment", "active"] } } });
+platformSubscriptionSchema.index(
+  { patient_profile: 1 },
+  {
+    name: "uniq_active_platform_subscription_per_patient",
+    unique: true,
+    partialFilterExpression: { status: { $in: ["pending_payment", "active"] } },
+  }
+);
 
 export default mongoose.model("PlatformSubscription", platformSubscriptionSchema);

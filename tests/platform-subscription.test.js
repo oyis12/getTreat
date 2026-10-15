@@ -23,6 +23,14 @@ test("platform subscription schema keeps platform billing state separate and req
   assert.equal(PlatformSubscription.schema.path("provider_service"), undefined);
 });
 
+test("active platform subscription uniqueness uses a named partial index without duplicate path indexes", () => {
+  const patientProfileIndexes = PlatformSubscription.schema.indexes().filter(([keys]) => Object.keys(keys).includes("patient_profile"));
+  assert.equal(patientProfileIndexes.some(([keys, options]) => Object.keys(keys).length === 1 && !options.unique), false);
+  const uniqueIndex = patientProfileIndexes.find(([, options]) => options.name === "uniq_active_platform_subscription_per_patient");
+  assert.ok(uniqueIndex);
+  assert.equal(uniqueIndex[1].unique, true);
+});
+
 test("platform payment attempt requires a unique Paystack reference and minor-unit amount", async () => {
   const attempt = new PlatformPaymentAttempt({ platform_subscription: "507f1f77bcf86cd799439011", patient_profile: "507f1f77bcf86cd799439012", purpose: "initial", reference: "gt4o-test-reference", amount_kobo: 55500, billing_email: "patient@example.com" });
   await assert.doesNotReject(attempt.validate());
